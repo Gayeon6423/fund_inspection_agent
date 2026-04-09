@@ -1,10 +1,13 @@
 import base64
 import json
+import logging
 import os
 import sys
+import time
 import traceback
 import urllib.error
 import urllib.request
+from uuid import uuid4
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -14,6 +17,12 @@ from pydantic import BaseModel
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv(), override=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+logger = logging.getLogger("fund-agent")
 
 # ── 환경변수 ──────────────────────────────────────────────
 api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -46,6 +55,11 @@ class AskRequest(BaseModel):
     manual_file_path: Optional[str] = None  # input_type="compare": 제안서 PDF
 
 
+def log_step(request_id: str, step: str, detail: str = ""):
+    suffix = f" | {detail}" if detail else ""
+    logger.info(f"[{request_id}] {step}{suffix}")
+
+
 # ── 파일 경로 해석 (data 폴더 재귀 탐색 포함) ────────────
 def resolve_path(relative: str) -> Path:
     """프로젝트 루트 기준 상대경로 → 절대경로. 없으면 data/ 폴더에서 재귀 탐색."""
@@ -62,28 +76,33 @@ def resolve_path(relative: str) -> Path:
 
 
 # ── 입력 컨텐츠 빌더 ─────────────────────────────────────
-def build_user_content(body: AskRequest) -> list:
+def build_user_content(body: AskRequest, request_id: str) -> list:
+    log_step(request_id, "입력 컨텐츠 구성 시작", f"input_type={body.input_type}")
+
     if body.input_type == "text":
         if not body.user_query:
             raise HTTPException(status_code=400, detail="text 모드에서는 user_query가 필요합니다.")
+        log_step(request_id, "입력 컨텐츠 구성 완료", "text")
         return [{"type": "text", "text": body.user_query}]
 
     if body.input_type == "json_file":
         if not body.file_path:
             raise HTTPException(status_code=400, detail="json_file 모드에서는 file_path가 필요합니다.")
         path = resolve_path(body.file_path)
-        print(f"[JSON 로드] {path}")
+        log_step(request_id, "JSON 파일 로드", str(path))
         with path.open(encoding="utf-8") as f:
             content = json.load(f)
+        log_step(request_id, "입력 컨텐츠 구성 완료", "json_file")
         return [{"type": "text", "text": json.dumps(content, ensure_ascii=False, indent=2)}]
 
     if body.input_type == "pdf_file":
         if not body.file_path:
             raise HTTPException(status_code=400, detail="pdf_file 모드에서는 file_path가 필요합니다.")
         path = resolve_path(body.file_path)
-        print(f"[PDF 로드] {path}")
+        log_step(request_id, "PDF 파일 로드", str(path))
         with path.open("rb") as f:
             pdf_b64 = base64.standard_b64encode(f.read()).decode("utf-8")
+        log_step(request_id, "입력 컨텐츠 구성 완료", "pdf_file")
         return [{"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_b64}}]
 
     if body.input_type == "compare":
@@ -91,15 +110,16 @@ def build_user_content(body: AskRequest) -> list:
             raise HTTPException(status_code=400, detail="compare 모드에서는 script_file_path와 manual_file_path가 필요합니다.")
 
         script_path = resolve_path(body.script_file_path)
-        print(f"[판매대본 로드] {script_path}")
+        log_step(request_id, "판매대본 JSON 로드", str(script_path))
         with script_path.open(encoding="utf-8") as f:
             script_content = json.load(f)
 
         manual_path = resolve_path(body.manual_file_path)
-        print(f"[제안서 로드] {manual_path}")
+        log_step(request_id, "설명서 PDF 로드", str(manual_path))
         with manual_path.open("rb") as f:
             pdf_b64 = base64.standard_b64encode(f.read()).decode("utf-8")
 
+        log_step(request_id, "입력 컨텐츠 구성 완료", "compare")
         return [
             {"type": "text", "text": f"[판매대본 JSON]\n{json.dumps(script_content, ensure_ascii=False, indent=2)}"},
             {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_b64}},
@@ -109,7 +129,7 @@ def build_user_content(body: AskRequest) -> list:
 
 
 # ── Claude API 호출 ───────────────────────────────────────
-def call_claude(user_content: list) -> str:
+def call_claude(user_content: list, request_id: str) -> str:
     payload = {
         "model": MODEL,
         "max_tokens": 4096,
@@ -124,7 +144,7 @@ def call_claude(user_content: list) -> str:
     if any(block.get("type") == "document" for block in user_content):
         headers["anthropic-beta"] = "pdfs-2024-09-25"
 
-    print(f"[Claude 호출] model={MODEL}, blocks={[b['type'] for b in user_content]}")
+    log_step(request_id, "Claude API 요청 시작", f"model={MODEL}, blocks={[b['type'] for b in user_content]}")
     req = urllib.request.Request(
         url="https://api.anthropic.com/v1/messages",
         data=json.dumps(payload).encode("utf-8"),
@@ -134,22 +154,29 @@ def call_claude(user_content: list) -> str:
     try:
         with urllib.request.urlopen(req, timeout=180) as resp:
             result = json.loads(resp.read().decode("utf-8"))
+        log_step(request_id, "Claude API 요청 완료")
         return result["content"][0]["text"]
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="ignore")
+        log_step(request_id, "Claude API HTTP 오류", f"status={e.code}")
         raise HTTPException(status_code=502, detail=f"Claude API 오류: {body}")
     except urllib.error.URLError as e:
+        log_step(request_id, "Claude API 네트워크 오류", str(e.reason))
         raise HTTPException(status_code=502, detail=f"네트워크 오류: {e.reason}")
 
 
 # ── 엔드포인트: 질문 → 답변 ───────────────────────────────
 @app.post("/v1/agent/fund/ask")
 def ask(body: AskRequest):
-    try:
-        user_content = build_user_content(body)
-        print("[Claude 요청 시작]")
-        answer = call_claude(user_content)
+    request_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:8]
+    started_at = time.perf_counter()
+    log_step(request_id, "요청 수신", f"input_type={body.input_type}")
 
+    try:
+        user_content = build_user_content(body, request_id)
+        answer = call_claude(user_content, request_id)
+
+        log_step(request_id, "응답 JSON 파싱 시작")
         start = answer.find("{")
         end = answer.rfind("}") + 1
         if start == -1 or end == 0:
@@ -158,20 +185,29 @@ def ask(body: AskRequest):
             parsed = json.loads(answer[start:end])
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=500, detail=f"JSON 파싱 실패: {e}")
+        log_step(request_id, "응답 JSON 파싱 완료")
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_step(request_id, "결과 파일 저장 시작")
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         output_path = OUTPUT_DIR / f"{system_prompt}_{timestamp}.json"
         with output_path.open("w", encoding="utf-8") as f:
             json.dump(parsed, f, ensure_ascii=False, indent=2)
-        print(f"[저장 완료] {output_path}")
+        log_step(request_id, "결과 파일 저장 완료", str(output_path))
+
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        log_step(request_id, "요청 처리 완료", f"{elapsed_ms}ms")
 
         return parsed
 
     except HTTPException:
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        log_step(request_id, "요청 처리 실패(HTTPException)", f"{elapsed_ms}ms")
         raise
     except Exception as e:
         traceback.print_exc()
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        log_step(request_id, "요청 처리 실패(Exception)", f"{type(e).__name__}: {e} | {elapsed_ms}ms")
         raise HTTPException(status_code=500, detail=f"서버 오류: {type(e).__name__}: {e}")
 
 
