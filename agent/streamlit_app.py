@@ -375,7 +375,7 @@ def main():
             convert_status_map[sheet] = "변환 중"
             st.session_state["convert_status"] = convert_status_map
             render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
-            with st.spinner(f"[{sheet}] 변환 및 비교 중..."):
+            with st.spinner(f"[{sheet}] 변환 및 분석 중..."):
                 try:
                     conversion = convert_excel_to_json_by_sheets(
                         input_path=excel_upload_path,
