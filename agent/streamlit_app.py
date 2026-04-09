@@ -436,30 +436,29 @@ def main():
             st.session_state["convert_status"] = convert_status_map
             render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
             try:
-                with st.spinner(f"[{sheet}] 변환 및 분석 중..."):
-                    conversion = convert_excel_to_json_by_sheets(
-                        input_path=excel_upload_path,
-                        sheet_names=[sheet],
-                        output_dir=OUTPUT_EXCEL_JSON_DIR,
-                    )[0]
-                    script_json_path = Path(conversion["output_path"])
-                    script_json = json.loads(script_json_path.read_text(encoding="utf-8"))
-                    convert_status_map[sheet] = "변환 완료"
-                    analyze_status_map[sheet] = "분석 중"
-                    current_step[0] = "분석 중"
-                    st.session_state["convert_status"] = convert_status_map
-                    st.session_state["analyze_status"] = analyze_status_map
-                    render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
+                conversion = convert_excel_to_json_by_sheets(
+                    input_path=excel_upload_path,
+                    sheet_names=[sheet],
+                    output_dir=OUTPUT_EXCEL_JSON_DIR,
+                )[0]
+                script_json_path = Path(conversion["output_path"])
+                script_json = json.loads(script_json_path.read_text(encoding="utf-8"))
+                convert_status_map[sheet] = "변환 완료"
+                analyze_status_map[sheet] = "분석 중"
+                current_step[0] = "분석 중"
+                st.session_state["convert_status"] = convert_status_map
+                st.session_state["analyze_status"] = analyze_status_map
+                render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
 
-                    answer_text = call_claude_compare(
-                        script_json=script_json,
-                        manual_pdf_bytes=manual_pdf_bytes,
-                        model=model,
-                        api_key=api_key,
-                        system_prompt=system_prompt,
-                    )
-                    result_json = parse_json_from_text(answer_text)
-                    match_rate = calc_match_rate(result_json)
+                answer_text = call_claude_compare(
+                    script_json=script_json,
+                    manual_pdf_bytes=manual_pdf_bytes,
+                    model=model,
+                    api_key=api_key,
+                    system_prompt=system_prompt,
+                )
+                result_json = parse_json_from_text(answer_text)
+                match_rate = calc_match_rate(result_json)
 
                 output_name = f"{system_prompt_version}_{safe_name(sheet)}_{ts}.json"
                 output_path = OUTPUT_AGENT_DIR / output_name
