@@ -16,7 +16,7 @@ venv/
 # Secrets
 .env
 .env.*
-.secrets.toml
+secrets.toml
 
 # Local tool folders
 .claude/
