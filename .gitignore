@@ -29,11 +29,11 @@ venv/
 legacy/
 
 # Generated outputs
-data/output_excel_json/
-data/output_agent/
-data/output_json/
+# data/output_excel_json/
+# data/output_agent/
+# data/output_json/
 
 # Raw input files (민감 데이터)
-data/**/*.pdf
-data/**/*.xlsx
-data/**/*.csv
+# data/**/*.pdf
+# data/**/*.xlsx
+# data/**/*.csv
