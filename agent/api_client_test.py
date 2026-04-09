@@ -34,13 +34,13 @@ elif INPUT_TYPE == "json_file":
 elif INPUT_TYPE == "pdf_file":
     data = {
         "input_type": "pdf_file",
-        "file_path": f"data/{os.getenv('INPUT_MANUAL_FILE')}",
+        "file_path": f"data/uploads_local/{os.getenv('INPUT_MANUAL_FILE')}",
     }
 elif INPUT_TYPE == "compare":
     data = {
         "input_type": "compare",
         "script_file_path": f"data/output_excel_json/{os.getenv('INPUT_SCRIPT_FILE')}",
-        "manual_file_path": f"data/{os.getenv('INPUT_MANUAL_FILE')}",
+        "manual_file_path": f"data/uploads_local/{os.getenv('INPUT_MANUAL_FILE')}",
     }
 
 # ── 요청 전송 및 결과 출력 ────────────────────────────────

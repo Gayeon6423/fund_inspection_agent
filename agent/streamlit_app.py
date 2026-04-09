@@ -1,18 +1,30 @@
 import base64
+import csv
 import html
 import json
 import os
 import re
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from zipfile import ZipFile
 
 import streamlit as st
+
+try:
+    from streamlit.runtime.scriptrunner import add_script_run_ctx
+except ImportError:
+    try:
+        from streamlit.scriptrunner import add_script_run_ctx
+    except ImportError:
+        def add_script_run_ctx(t):
+            return t
 from dotenv import find_dotenv, load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -25,7 +37,7 @@ NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_REL_OFFICE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_REL_PACKAGE = "http://schemas.openxmlformats.org/package/2006/relationships"
 
-UPLOAD_DIR = PROJECT_ROOT / "data" / "uploads"
+UPLOAD_DIR = PROJECT_ROOT / "data" / "uploads_external"
 OUTPUT_EXCEL_JSON_DIR = PROJECT_ROOT / "data" / "output_excel_json"
 OUTPUT_AGENT_DIR = PROJECT_ROOT / "data" / "output_agent"
 PROMPT_DIR = Path(__file__).resolve().parent / "prompt"
@@ -134,9 +146,9 @@ def to_html_text(value):
 def render_info_block(title: str, body):
     st.markdown(
         f"""
-        <div style="border:1px solid #e5e7eb; border-radius:14px; padding:14px; background:#ffffff; height:100%;">
-          <div style="font-size:14px; color:#6b7280; margin-bottom:8px;">{to_html_text(title)}</div>
-          <div style="font-size:15px; line-height:1.6;">{to_html_text(body)}</div>
+        <div style="border:1px solid rgba(128,128,128,0.2); border-radius:14px; padding:14px; background:var(--secondary-background-color); height:100%;">
+          <div style="font-size:14px; color:var(--text-color); opacity:0.65; margin-bottom:8px;">{to_html_text(title)}</div>
+          <div style="font-size:15px; line-height:1.6; color:var(--text-color);">{to_html_text(body)}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -145,21 +157,21 @@ def render_info_block(title: str, body):
 
 def render_rate_card(sheet: str, rate):
     rate_text = "-" if rate is None else f"{rate}%"
-    rate_color = "#111827"
+    rate_color = "var(--text-color)"
     if isinstance(rate, int):
         if rate >= 80:
-            rate_color = "#0f766e"
+            rate_color = "#22c55e"
         elif rate >= 60:
-            rate_color = "#92400e"
+            rate_color = "#f59e0b"
         else:
-            rate_color = "#b91c1c"
+            rate_color = "#ef4444"
 
     st.markdown(
         f"""
-        <div style="border:1px solid #d1d5db; border-radius:16px; padding:16px; background:#f8fafc;">
-          <div style="font-size:14px; color:#6b7280; margin-bottom:6px;">시트</div>
-          <div style="font-size:16px; font-weight:700; margin-bottom:12px;">{to_html_text(sheet)}</div>
-          <div style="font-size:13px; color:#6b7280;">일치율</div>
+        <div style="border:1px solid rgba(128,128,128,0.2); border-radius:16px; padding:16px; background:var(--secondary-background-color);">
+          <div style="font-size:14px; color:var(--text-color); opacity:0.65; margin-bottom:6px;">시트</div>
+          <div style="font-size:16px; font-weight:700; margin-bottom:12px; color:var(--text-color);">{to_html_text(sheet)}</div>
+          <div style="font-size:13px; color:var(--text-color); opacity:0.65;">일치율</div>
           <div style="font-size:32px; font-weight:800; color:{rate_color}; line-height:1.2;">{rate_text}</div>
         </div>
         """,
@@ -226,6 +238,14 @@ def render_status_panel(container, sheets, convert_status_map, analyze_status_ma
             st.markdown(f"- {status_icon(status)} **{sheet}**: {status}")
 
 
+def rows_to_csv(rows: list) -> bytes:
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=["항목", "판정", "근거"])
+    writer.writeheader()
+    writer.writerows(rows)
+    return output.getvalue().encode("utf-8-sig")
+
+
 def render_comparison_table(rows, verdict_filter: str):
     if verdict_filter != "전체":
         rows = [r for r in rows if r["판정"] == verdict_filter]
@@ -237,9 +257,20 @@ def render_comparison_table(rows, verdict_filter: str):
     st.markdown(
         """
         <style>
-        .cmp-table { width:100%; border-collapse: collapse; font-size:14px; }
-        .cmp-table th { text-align:left; background:#f3f4f6; padding:10px; border:1px solid #e5e7eb; }
-        .cmp-table td { vertical-align:top; padding:10px; border:1px solid #e5e7eb; }
+        .cmp-table { width:100%; border-collapse: collapse; font-size:14px; color:var(--text-color); }
+        .cmp-table th {
+            text-align:left;
+            background:var(--secondary-background-color);
+            color:var(--text-color);
+            padding:10px;
+            border:1px solid rgba(128,128,128,0.25);
+        }
+        .cmp-table td {
+            vertical-align:top;
+            padding:10px;
+            border:1px solid rgba(128,128,128,0.25);
+            color:var(--text-color);
+        }
         .badge-ok { color:#065f46; font-weight:700; background:#d1fae5; padding:3px 8px; border-radius:999px; }
         .badge-no { color:#991b1b; font-weight:700; background:#fee2e2; padding:3px 8px; border-radius:999px; }
         .memo { display:block; white-space:pre-wrap; line-height:1.5; }
@@ -308,9 +339,20 @@ def main():
     st.set_page_config(page_title="펀드판매대본 점검", layout="wide")
     st.markdown(
         """
-        <div style="background:#e6f7ff; border:1px solid #bae6fd; border-radius:14px; padding:16px 18px; margin-bottom:14px;">
-          <div style="font-size:30px; font-weight:800; color:#111827; line-height:1.2;">📄 펀드판매대본 점검 시스템</div>
-          <div style="font-size:16px; font-weight:600; color:#111827; margin-top:6px;">펀드 판매대본과 상품 설명서의 일치도를 분석합니다.</div>
+        <style>
+        .app-header {
+            background: var(--secondary-background-color);
+            border: 1px solid rgba(128,128,128,0.25);
+            border-radius: 14px;
+            padding: 16px 18px;
+            margin-bottom: 14px;
+        }
+        .app-header .title { font-size:30px; font-weight:800; color:var(--text-color); line-height:1.2; }
+        .app-header .subtitle { font-size:16px; font-weight:600; color:var(--text-color); opacity:0.8; margin-top:6px; }
+        </style>
+        <div class="app-header">
+          <div class="title">📄 펀드판매대본 점검 시스템</div>
+          <div class="subtitle">펀드 판매대본과 상품 설명서의 일치도를 분석합니다.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -372,11 +414,29 @@ def main():
         render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
 
         for sheet in selected_sheets:
+            sheet_start = time.time()
+            timer_ph = st.empty()
+            current_step = ["변환 중"]
+            done_event = threading.Event()
+
+            def _timer_tick(ph, start, step_ref, stop):
+                while not stop.wait(timeout=1):
+                    elapsed = int(time.time() - start)
+                    ph.info(f"[{sheet}] {step_ref[0]}... ({elapsed}초 경과)")
+
+            timer_thread = threading.Thread(
+                target=_timer_tick,
+                args=(timer_ph, sheet_start, current_step, done_event),
+                daemon=True,
+            )
+            add_script_run_ctx(timer_thread)
+            timer_thread.start()
+
             convert_status_map[sheet] = "변환 중"
             st.session_state["convert_status"] = convert_status_map
             render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
-            with st.spinner(f"[{sheet}] 변환 및 분석 중..."):
-                try:
+            try:
+                with st.spinner(f"[{sheet}] 변환 및 분석 중..."):
                     conversion = convert_excel_to_json_by_sheets(
                         input_path=excel_upload_path,
                         sheet_names=[sheet],
@@ -386,6 +446,7 @@ def main():
                     script_json = json.loads(script_json_path.read_text(encoding="utf-8"))
                     convert_status_map[sheet] = "변환 완료"
                     analyze_status_map[sheet] = "분석 중"
+                    current_step[0] = "분석 중"
                     st.session_state["convert_status"] = convert_status_map
                     st.session_state["analyze_status"] = analyze_status_map
                     render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
@@ -400,46 +461,62 @@ def main():
                     result_json = parse_json_from_text(answer_text)
                     match_rate = calc_match_rate(result_json)
 
-                    output_name = f"{system_prompt_version}_{safe_name(sheet)}_{ts}.json"
-                    output_path = OUTPUT_AGENT_DIR / output_name
-                    output_path.write_text(
-                        json.dumps(result_json, ensure_ascii=False, indent=2),
-                        encoding="utf-8",
-                    )
+                output_name = f"{system_prompt_version}_{safe_name(sheet)}_{ts}.json"
+                output_path = OUTPUT_AGENT_DIR / output_name
+                output_path.write_text(
+                    json.dumps(result_json, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
 
-                    analysis_results.append(
-                        {
-                            "sheet": sheet,
-                            "match_rate": match_rate,
-                            "result_json": result_json,
-                            "output_path": str(output_path),
-                        }
-                    )
-                    analyze_status_map[sheet] = "분석 완료"
+                analysis_results.append(
+                    {
+                        "sheet": sheet,
+                        "match_rate": match_rate,
+                        "result_json": result_json,
+                        "output_path": str(output_path),
+                    }
+                )
+                done_event.set()
+                timer_thread.join(timeout=2)
+                elapsed_total = int(time.time() - sheet_start)
+                analyze_status_map[sheet] = f"분석 완료 ({elapsed_total}초)"
+                timer_ph.success(f"✅ [{sheet}] 완료! (총 {elapsed_total}초 소요)")
 
-                except urllib.error.HTTPError as e:
-                    body = e.read().decode("utf-8", errors="ignore")
-                    st.error(f"[{sheet}] Claude API HTTP 에러: {e.code}\n{body}")
-                    if convert_status_map.get(sheet) == "변환 중":
-                        convert_status_map[sheet] = "변환 오류"
-                    else:
-                        analyze_status_map[sheet] = "분석 오류"
-                except urllib.error.URLError as e:
-                    st.error(f"[{sheet}] 네트워크 에러: {e.reason}")
-                    if convert_status_map.get(sheet) == "변환 중":
-                        convert_status_map[sheet] = "변환 오류"
-                    else:
-                        analyze_status_map[sheet] = "분석 오류"
-                except Exception as e:
-                    st.error(f"[{sheet}] 처리 중 오류: {e}")
-                    if convert_status_map.get(sheet) == "변환 중":
-                        convert_status_map[sheet] = "변환 오류"
-                    else:
-                        analyze_status_map[sheet] = "분석 오류"
-                finally:
-                    st.session_state["convert_status"] = convert_status_map
-                    st.session_state["analyze_status"] = analyze_status_map
-                    render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
+            except urllib.error.HTTPError as e:
+                done_event.set()
+                timer_thread.join(timeout=2)
+                elapsed = int(time.time() - sheet_start)
+                body = e.read().decode("utf-8", errors="ignore")
+                st.error(f"[{sheet}] Claude API HTTP 에러: {e.code}\n{body}")
+                timer_ph.error(f"❌ [{sheet}] 오류 ({elapsed}초 후)")
+                if convert_status_map.get(sheet) == "변환 중":
+                    convert_status_map[sheet] = "변환 오류"
+                else:
+                    analyze_status_map[sheet] = "분석 오류"
+            except urllib.error.URLError as e:
+                done_event.set()
+                timer_thread.join(timeout=2)
+                elapsed = int(time.time() - sheet_start)
+                st.error(f"[{sheet}] 네트워크 에러: {e.reason}")
+                timer_ph.error(f"❌ [{sheet}] 오류 ({elapsed}초 후)")
+                if convert_status_map.get(sheet) == "변환 중":
+                    convert_status_map[sheet] = "변환 오류"
+                else:
+                    analyze_status_map[sheet] = "분석 오류"
+            except Exception as e:
+                done_event.set()
+                timer_thread.join(timeout=2)
+                elapsed = int(time.time() - sheet_start)
+                st.error(f"[{sheet}] 처리 중 오류: {e}")
+                timer_ph.error(f"❌ [{sheet}] 오류 ({elapsed}초 후)")
+                if convert_status_map.get(sheet) == "변환 중":
+                    convert_status_map[sheet] = "변환 오류"
+                else:
+                    analyze_status_map[sheet] = "분석 오류"
+            finally:
+                st.session_state["convert_status"] = convert_status_map
+                st.session_state["analyze_status"] = analyze_status_map
+                render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
 
         st.session_state["analysis_results"] = analysis_results
         if analysis_results:
@@ -488,13 +565,25 @@ def main():
 
     st.markdown("")
     st.subheader("항목별 일치 비교")
-    verdict_filter = st.radio(
-        " ",
-        options=["전체", "일치", "불일치"],
-        horizontal=True,
-        key="verdict_filter",
-    )
     rows = build_comparison_rows(result_json)
+    filter_col, btn_col = st.columns([3, 1])
+    with filter_col:
+        verdict_filter = st.radio(
+            " ",
+            options=["전체", "일치", "불일치"],
+            horizontal=True,
+            key="verdict_filter",
+        )
+    with btn_col:
+        if rows:
+            st.markdown("<div style='height:22px;'></div>", unsafe_allow_html=True)
+            st.download_button(
+                label="📥 CSV 다운로드",
+                data=rows_to_csv(rows),
+                file_name=f"비교결과_{safe_name(selected['sheet'])}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
     render_comparison_table(rows, verdict_filter)
 
 
