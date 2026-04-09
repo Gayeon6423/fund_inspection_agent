@@ -26,12 +26,12 @@ logger = logging.getLogger("fund-agent")
 
 # ── 환경변수 ──────────────────────────────────────────────
 api_key = os.getenv("ANTHROPIC_API_KEY")
-system_prompt = os.getenv("SYSTEM_PROMPT_VERSION")
+system_prompt = os.getenv("SYSTEM_PROMPT_VERSION","system_prompt_v5")
 if not api_key:
     print("에러: ANTHROPIC_API_KEY 환경변수를 먼저 설정해주세요.")
     sys.exit(1)
 
-MODEL        = os.getenv("LLM_MODEL")
+MODEL        = os.getenv("LLM_MODEL", "claude-sonnet-4-6")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR   = PROJECT_ROOT / "data" / "output_agent"
 

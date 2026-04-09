@@ -268,16 +268,41 @@ def render_comparison_table(rows, verdict_filter: str):
     st.markdown("".join(table_html), unsafe_allow_html=True)
 
 
+# def main():
+#     load_dotenv(find_dotenv(), override=True)
+#     api_key = os.getenv("ANTHROPIC_API_KEY")
+#     model = os.getenv("LLM_MODEL")
+#     system_prompt_version = os.getenv("SYSTEM_PROMPT_VERSION")
+
+#     prompt_path = PROMPT_DIR / f"{system_prompt_version}.txt"
+#     if not prompt_path.exists():
+#         st.error(f"프롬프트 파일이 없습니다: {prompt_path}")
+#         st.stop()
+#     system_prompt = prompt_path.read_text(encoding="utf-8")
+
+def get_setting(name: str, default: str | None = None):
+    if name in st.secrets:
+        return st.secrets[name]
+    return os.getenv(name, default)
+
+
 def main():
+    st.set_page_config(page_title="펀드판매대본 점검", layout="wide")
+
     load_dotenv(find_dotenv(), override=True)
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    model = os.getenv("LLM_MODEL")
-    system_prompt_version = os.getenv("SYSTEM_PROMPT_VERSION")
+
+    api_key = get_setting("ANTHROPIC_API_KEY")
+    model = get_setting("LLM_MODEL", "claude-sonnet-4-6")
+    system_prompt_version = get_setting("SYSTEM_PROMPT_VERSION", "system_prompt_v5")
 
     prompt_path = PROMPT_DIR / f"{system_prompt_version}.txt"
     if not prompt_path.exists():
-        st.error(f"프롬프트 파일이 없습니다: {prompt_path}")
+        st.error(
+            f"프롬프트 파일이 없습니다: {prompt_path}\n"
+            f"SYSTEM_PROMPT_VERSION 값을 확인해주세요."
+        )
         st.stop()
+
     system_prompt = prompt_path.read_text(encoding="utf-8")
 
     st.set_page_config(page_title="펀드판매대본 점검", layout="wide")
