@@ -39,10 +39,18 @@ elif INPUT_TYPE == "pdf_file":
 elif INPUT_TYPE == "compare":
     data = {
         "input_type": "compare",
-        "script_file_path": f"data/output_excel_json/{os.getenv('INPUT_SCRIPT_FILE')}",
+        "script_file_path": f"data/uploads_local/{os.getenv('INPUT_SCRIPT_FILE')}",
         "manual_file_path": f"data/uploads_local/{os.getenv('INPUT_MANUAL_FILE')}",
+        "sheet_name": os.getenv("INPUT_SCRIPT_SHEET"),  # None이면 첫 번째 시트 사용
     }
 
 # ── 요청 전송 및 결과 출력 ────────────────────────────────
 url = f"{BASE_URL}/v1/agent/fund/ask"
-resp = requests.post(url, json=data, timeout=200)
+print(f"요청 전송: {url}")
+resp = requests.post(url, json=data, timeout=300)
+print(f"HTTP 상태: {resp.status_code}")
+if resp.ok:
+    result = resp.json()
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+else:
+    print("오류:", resp.text)
