@@ -4,7 +4,7 @@
 
 ## 핵심 기능
 - Excel 판매대본을 JSON으로 변환 (`excel_json/excel_to_json.py`)
-- Claude API 기반 비교 분석 (`agent/api_server.py`)
+- Claude API 기반 비교 분석 (`agent/fund_core.py`, `agent/api_server.py`)
 - Streamlit 웹 UI에서 업로드/시트선택/상태확인/결과조회 (`agent/app.py`)
 - API 서버 단계별 진행 로그(어디서 멈췄는지 추적 가능)
 
@@ -13,17 +13,33 @@
 .
 ├─ agent/
 │  ├─ api_server.py         # FastAPI 서버 (비교 분석 API)
-│  ├─ api_client_test.py    # API 테스트 스크립트
-│  ├─ app.py      # Streamlit 웹 UI
+│  ├─ api_server_test.py    # API 테스트 스크립트
+│  ├─ app.py                # Streamlit 웹 UI
+│  ├─ fund_core.py          # 핵심 분석 로직 (Claude API 호출)
 │  └─ prompt/
+│     ├─ system_prompt_v1.txt
+│     ├─ system_prompt_v2.txt
+│     ├─ system_prompt_v3.txt
+│     ├─ system_prompt_v4.txt
+│     ├─ system_prompt_v5.txt
+│     └─ system_prompt_v6.txt
 ├─ excel_json/
+│  ├─ __init__.py
 │  └─ excel_to_json.py      # Excel -> JSON 변환
 ├─ data/
 │  ├─ output_excel_json/    # 변환된 판매대본 JSON
 │  ├─ output_agent/         # 분석 결과 JSON
-│  └─ uploads/              # 웹 UI 업로드 임시 파일
+│  ├─ uploads_local/        # 로컬 실행 시 입력 파일
+│  └─ uploads_external/     # 웹 UI 업로드 파일 (타임스탬프 prefix)
+├─ legacy/                  # 구버전 파일 보관
+│  ├─ agent_test.py
+│  ├─ api_client_test copy.py
+│  └─ api_server copy.py
+├─ pyproject.toml
 ├─ requirements.txt
-└─ .env
+├─ uv.lock
+├─ .env
+└─ .env_example
 ```
 
 ## 1) 설치
@@ -31,16 +47,24 @@
 pip install -r requirements.txt
 ```
 
+또는 uv를 사용하는 경우:
+```bash
+uv sync
+```
+
 ## 2) 환경변수 설정 (`.env`)
-프로젝트 루트에 `.env` 파일 생성:
+`.env_example`을 복사해 `.env` 파일 생성:
 
 ```env
-ANTHROPIC_API_KEY=your_key
-LLM_MODEL=claude-3-5-sonnet-latest
-SYSTEM_PROMPT_VERSION=system_prompt_v4
-INPUT_SCRIPT_FILE=사모_판매대본_라이프META일반사모투자신탁 제2호_사모펀드(방문)_20260409_170624.json
-INPUT_MANUAL_FILE=사모_설명서_라이프 META 일반사모투자신탁 제2호_20260318.pdf
-USER_QUERY=안녕
+ANTHROPIC_API_KEY="your_key"
+LLM_MODEL="claude-sonnet-4-6"
+
+# Agent configuration
+SYSTEM_PROMPT_VERSION='system_prompt_v6'
+
+# Agent Input (로컬 실행 시)
+INPUT_SCRIPT_FILE='판매대본.json'
+INPUT_MANUAL_FILE='상품설명서.pdf'
 ```
 
 ## 3) Excel -> JSON 변환
@@ -103,6 +127,8 @@ UI 기능:
   - 상세 분석(category, summary)
   - 항목별 일치 비교 표
   - 판정 필터(전체/일치/불일치)
+
+업로드된 파일은 `data/uploads_external/`에 `YYYYMMDD_HHMMSS_원본파일명` 형식으로 저장됩니다.
 
 주의:
 - 업로드 파일은 반드시 **복호화된 파일**이어야 합니다.
