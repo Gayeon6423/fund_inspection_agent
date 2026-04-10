@@ -264,7 +264,7 @@ def convert_excel_to_json_by_sheets(input_path: Path, sheet_names, output_dir: P
             payload = build_stage_json(rows, header_row, step_col, example_col)
 
             output_name = (
-                f"{input_path.stem}_{safe_filename_part(requested_sheet_name)}_{timestamp}.json"
+                f"{timestamp}_{input_path.stem}_{safe_filename_part(requested_sheet_name)}.json"
             )
             output_path = output_dir / output_name
             output_path.parent.mkdir(parents=True, exist_ok=True)
