@@ -5,7 +5,7 @@
 ## 핵심 기능
 - Excel 판매대본을 JSON으로 변환 (`excel_json/excel_to_json.py`)
 - Claude API 기반 비교 분석 (`agent/api_server.py`)
-- Streamlit 웹 UI에서 업로드/시트선택/상태확인/결과조회 (`agent/streamlit_app.py`)
+- Streamlit 웹 UI에서 업로드/시트선택/상태확인/결과조회 (`agent/app.py`)
 - API 서버 단계별 진행 로그(어디서 멈췄는지 추적 가능)
 
 ## 폴더 구조
@@ -14,7 +14,7 @@
 ├─ agent/
 │  ├─ api_server.py         # FastAPI 서버 (비교 분석 API)
 │  ├─ api_client_test.py    # API 테스트 스크립트
-│  ├─ streamlit_app.py      # Streamlit 웹 UI
+│  ├─ app.py      # Streamlit 웹 UI
 │  └─ prompt/
 ├─ excel_json/
 │  └─ excel_to_json.py      # Excel -> JSON 변환
@@ -88,7 +88,7 @@ uvicorn agent.api_server:app --reload --port 8000
 
 ## 5) 웹 UI 실행 (Streamlit)
 ```bash
-streamlit run agent/streamlit_app.py
+streamlit run agent/app.py
 ```
 
 UI 기능:
@@ -109,13 +109,13 @@ UI 기능:
 
 ## 6) API 테스트 스크립트
 ```bash
-python agent/api_client_test.py
+python agent/api_server_test.py
 ```
 
 ## 7) 문제 해결
 - `ModuleNotFoundError: excel_json`
   - 프로젝트 루트에서 실행
-  - `streamlit run agent/streamlit_app.py` 형태로 실행
+  - `streamlit run agent/app.py` 형태로 실행
 - Claude 호출 실패 시
   - `.env`의 `ANTHROPIC_API_KEY` 확인
   - API 서버 로그의 `request_id` 기준으로 실패 단계 확인
