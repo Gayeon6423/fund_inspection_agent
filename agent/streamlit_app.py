@@ -298,19 +298,6 @@ def render_comparison_table(rows, verdict_filter: str):
     table_html.append("</tbody></table>")
     st.markdown("".join(table_html), unsafe_allow_html=True)
 
-
-# def main():
-#     load_dotenv(find_dotenv(), override=True)
-#     api_key = os.getenv("ANTHROPIC_API_KEY")
-#     model = os.getenv("LLM_MODEL")
-#     system_prompt_version = os.getenv("SYSTEM_PROMPT_VERSION")
-
-#     prompt_path = PROMPT_DIR / f"{system_prompt_version}.txt"
-#     if not prompt_path.exists():
-#         st.error(f"프롬프트 파일이 없습니다: {prompt_path}")
-#         st.stop()
-#     system_prompt = prompt_path.read_text(encoding="utf-8")
-
 def get_setting(name: str, default: str | None = None):
     if name in st.secrets:
         return st.secrets[name]
@@ -358,7 +345,7 @@ def main():
         unsafe_allow_html=True,
     )
 
-    st.sidebar.warning("주의: 복호화된 파일만 업로드해주세요.")
+    st.sidebar.warning("복호화된 파일만 업로드해주세요")
 
     script_excel = st.sidebar.file_uploader("• 판매대본 파일 업로드 (Excel)", type=["xlsx"])
 
@@ -370,7 +357,7 @@ def main():
         try:
             sheet_names = parse_sheet_names_from_xlsx_bytes(excel_bytes)
             selected_sheets = st.sidebar.multiselect(
-                "판매대본 시트 선택",
+                "• 판매대본 시트 선택",
                 options=sheet_names,
                 default=sheet_names[:1],
             )
@@ -525,45 +512,43 @@ def main():
     if not results:
         return
 
-    st.markdown("---")
-    st.subheader("판매대본별 일치율")
+    # ── 시트 선택 블록 ──────────────────────────────────────
+    # st.markdown("---")
+    st.subheader("대본별 일치도 분석 결과")
 
-    # 좌우 배치 카드
-    per_row = 3
+    if "selected_sheet" not in st.session_state:
+        st.session_state["selected_sheet"] = results[0]["sheet"]
+
+    per_row = 4
     for start in range(0, len(results), per_row):
         chunk = results[start:start + per_row]
         cols = st.columns(per_row)
         for idx, item in enumerate(chunk):
             with cols[idx]:
-                render_rate_card(item["sheet"], item["match_rate"])
-                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-                c1, c2, c3 = st.columns([1, 1.6, 1])
-                with c2:
-                    if st.button("상세 보기", key=f"detail_{item['sheet']}", use_container_width=True):
-                        st.session_state["selected_sheet"] = item["sheet"]
+                is_selected = st.session_state["selected_sheet"] == item["sheet"]
+                border_color = "#2563eb" if is_selected else "rgba(128,128,128,0.2)"
+                bg_color = "rgba(37,99,235,0.08)" if is_selected else "var(--secondary-background-color)"
+                st.markdown(
+                    f"""
+                    <div style="border:2px solid {border_color}; border-radius:12px; padding:10px 14px;
+                                background:{bg_color}; margin-bottom:4px;">
+                      <div style="font-size:14px; font-weight:700; color:var(--text-color);
+                                  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{html.escape(item['sheet'])}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if st.button("선택", key=f"sel_{item['sheet']}", use_container_width=True):
+                    st.session_state["selected_sheet"] = item["sheet"]
+                    st.rerun()
 
     selected_sheet = st.session_state.get("selected_sheet", results[0]["sheet"])
     selected = next((x for x in results if x["sheet"] == selected_sheet), results[0])
     result_json = selected["result_json"]
 
+    # ── 비교 표 ──────────────────────────────────────────────
+    # st.markdown(f"**{html.escape(selected['sheet'])}** 분석 결과")
     st.markdown("---")
-    st.subheader(f"상세 분석: {selected['sheet']}")
-    st.caption(f"저장 위치: {selected['output_path']}")
-
-    category = result_json.get("category", "-")
-    summary_script = result_json.get("summary_script") or result_json.get("summary", "-")
-    summary_manual = summary_manual_to_text(result_json.get("summary_manual"))
-
-    left, right = st.columns([1, 2])
-    with left:
-        render_info_block("카테고리", category)
-    with right:
-        render_info_block("판매대본 요약", summary_script)
-        st.markdown("")
-        render_info_block("상품설명서 요약", summary_manual)
-
-    st.markdown("")
-    st.subheader("항목별 일치 비교")
     rows = build_comparison_rows(result_json)
     filter_col, btn_col = st.columns([3, 1])
     with filter_col:
@@ -584,6 +569,18 @@ def main():
                 use_container_width=True,
             )
     render_comparison_table(rows, verdict_filter)
+
+    # ── 요약 정보 ─────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("요약 정보")
+    summary_script = result_json.get("summary_script") or result_json.get("summary", "-")
+    summary_manual = summary_manual_to_text(result_json.get("summary_manual"))
+
+    left, right = st.columns(2)
+    with left:
+        render_info_block("판매대본 요약", summary_script)
+    with right:
+        render_info_block("상품설명서 요약", summary_manual)
 
 
 if __name__ == "__main__":
