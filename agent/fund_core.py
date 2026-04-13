@@ -91,58 +91,36 @@ def _to_cell_text(value) -> str:
     return str(value).strip()
 
 
-def _pick_manual_fallback(item_key: str, summary_manual) -> str:
-    """summary_manual에서 항목명과 가까운 근거를 찾아 문자열로 반환."""
-    if isinstance(summary_manual, dict):
-        key_text = str(item_key or "")
-        tokens = [t for t in re.split(r"[\s,\-_/()]+", key_text) if len(t) >= 2]
-        hits = []
-        for k, v in summary_manual.items():
-            k_text = str(k)
-            if any(token in k_text or k_text in token for token in tokens):
-                hits.append(f"{k_text}: {_to_cell_text(v)}")
-        if hits:
-            return "\n".join(hits[:2])
-        # 항목 매칭 실패 시 억지 값을 채우지 않는다.
-        return "-"
-    return "-"
-
-
 def build_comparison_rows(result_json: dict, script_json: Optional[dict] = None, summary_manual=None) -> list:
     """결과 JSON → 비교 표 행 리스트 [{"항목", "판정", "판매대본", "설명서", "근거"}, ...]"""
     rows = []
-    for key, value in result_json.items():
-        if key in META_KEYS:
-            continue
-        if isinstance(value, list) and value:
+
+    # script_json의 key를 기반으로 순회
+    if isinstance(script_json, dict):
+        for key in script_json.keys():
+            if key not in result_json or key in META_KEYS:
+                continue
+
+            value = result_json[key]
+            if not isinstance(value, list) or len(value) < 3:
+                continue
+
             label = value[0]
             if label not in ("일치", "불일치"):
                 continue
 
-            script_text = _to_cell_text(value[1]) if len(value) > 1 else ""
-            manual_text = _to_cell_text(value[2]) if len(value) > 2 else ""
-            reason = _to_cell_text(value[3]) if len(value) > 3 else ""
+            # 구성: [판정, 설명서, 근거]
+            manual_text = _to_cell_text(value[1]) if len(value) > 1 else "-"
+            reason = _to_cell_text(value[2]) if len(value) > 2 else "-"
 
-            # 구버전 포맷 호환: ["불일치", "근거: ...", "불일치 근거: ..."]
-            if len(value) == 3 and label == "불일치":
-                if not manual_text:
-                    manual_text = _to_cell_text(value[1])
-                if not reason:
-                    reason = _to_cell_text(value[2])
+            # script_json에서 원본 판매대본 값 사용
+            script_text = _to_cell_text(script_json.get(key, ""))
 
-            # 값이 비어 있으면 UI에서 빈칸 대신 기본값 표시
-            if not script_text and isinstance(script_json, dict):
-                script_text = _to_cell_text(script_json.get(key, ""))
             script_text = script_text or "-"
-
-            if not manual_text:
-                manual_text = _pick_manual_fallback(key, summary_manual)
             manual_text = manual_text or "-"
 
-            if label == "일치":
-                reason = reason or "판매대본과 설명서의 핵심 내용이 일치합니다."
-            else:
-                reason = reason or "-"
+            if label == "일치" and not reason:
+                reason = "판매대본과 설명서의 핵심 내용이 일치합니다."
 
             rows.append({
                 "항목": key,
@@ -151,7 +129,6 @@ def build_comparison_rows(result_json: dict, script_json: Optional[dict] = None,
                 "설명서": manual_text,
                 "근거": reason,
             })
-            
 
     if not rows and isinstance(result_json.get("mismatches"), list):
         for item in result_json["mismatches"]:
@@ -223,6 +200,28 @@ def parse_json_from_text(answer_text: str) -> dict:
             f"LLM JSON 파싱 실패: {e.msg} (line {e.lineno}, column {e.colno}). "
             f"문제 줄: {bad_line[:200]}"
         ) from e
+
+
+def calc_match_rate(result_json: dict) -> dict:
+    """결과 JSON에서 일치도 비율 계산."""
+    total = 0
+    matched = 0
+    for key, value in result_json.items():
+        if key in META_KEYS:
+            continue
+        if isinstance(value, list) and len(value) >= 1:
+            label = value[0]
+            if label in ("일치", "불일치"):
+                total += 1
+                if label == "일치":
+                    matched += 1
+
+    rate = round((matched / total * 100) if total > 0 else 0, 1)
+    return {
+        "total": total,
+        "matched": matched,
+        "rate": rate,
+    }
 if __name__ == "__main__":
     # 간단한 테스트
     user_content = [{"type": "text", "text": "삼성전자의 종목코드는?"}]
