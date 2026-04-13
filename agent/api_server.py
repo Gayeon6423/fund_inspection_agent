@@ -31,9 +31,9 @@ logging.basicConfig(
 logger = logging.getLogger("fund-agent")
 
 # ── 환경변수 ──────────────────────────────────────────────
-api_key = os.getenv("API_KEY")
-system_prompt_version = os.getenv("SYSTEM_PROMPT_VERSION", "system_prompt_v5")
-if not api_key:
+API_KEY = os.getenv("API_KEY")
+SYSTEM_PROMPT_VERSION = os.getenv("SYSTEM_PROMPT_VERSION", "system_prompt_v5")
+if not API_KEY:
     print("에러: API_KEY 환경변수를 먼저 설정해주세요.")
     sys.exit(1)
 
@@ -41,7 +41,7 @@ MODEL        = os.getenv("LLM_MODEL")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR   = PROJECT_ROOT / "data" / "output_agent"
 
-_prompt_path = Path(__file__).resolve().parent / "prompt" / f"{system_prompt_version}.txt"
+_prompt_path = Path(__file__).resolve().parent / "prompt" / f"{SYSTEM_PROMPT_VERSION}.txt"
 with open(_prompt_path, encoding="utf-8") as _f:
     SYSTEM_PROMPT = _f.read().strip()
 
@@ -158,7 +158,7 @@ def ask(body: AskRequest):
 
     try:
         user_content = build_user_content(body, request_id)
-        answer = call_llm(user_content, MODEL, api_key, SYSTEM_PROMPT)
+        answer = call_llm(user_content, MODEL, API_KEY, SYSTEM_PROMPT)
 
         log_step(request_id, "응답 JSON 파싱 시작")
         log_step(request_id, "LLM 응답 미리보기", answer[:300].replace("\n", " "))
@@ -171,7 +171,7 @@ def ask(body: AskRequest):
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = OUTPUT_DIR / f"local_{timestamp}_{system_prompt_version}.json"
+        output_path = OUTPUT_DIR / f"local_{timestamp}_{SYSTEM_PROMPT_VERSION}.json"
         output_path.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
         log_step(request_id, "결과 파일 저장 완료", str(output_path))
 
