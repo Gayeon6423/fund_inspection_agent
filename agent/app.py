@@ -77,7 +77,7 @@ def get_setting(name: str, default: str | None = None):
 
 def rows_to_csv(rows: list) -> bytes:
     output = StringIO()
-    writer = csv.DictWriter(output, fieldnames=["항목", "판정", "근거"])
+    writer = csv.DictWriter(output, fieldnames=["항목", "판정", "판매대본", "설명서", "근거"])
     writer.writeheader()
     writer.writerows(rows)
     return output.getvalue().encode("utf-8-sig")
@@ -154,18 +154,22 @@ def render_comparison_table(rows, verdict_filter: str):
     )
     table_html = [
         "<table class='cmp-table'>",
-        "<thead><tr><th style='width:28%'>항목</th><th style='width:12%'>판정</th><th>근거</th></tr></thead>",
+        "<thead><tr><th style='width:22%'>항목</th><th style='width:8%'>판정</th><th style='width:25%'>판매대본</th><th style='width:25%'>설명서</th><th>근거</th></tr></thead>",
         "<tbody>",
     ]
     for row in rows:
         verdict = row["판정"]
         badge = "<span class='badge-ok'>일치</span>" if verdict == "일치" else "<span class='badge-no'>불일치</span>"
-        memo = html.escape(str(row.get("근거", "") or "-")).replace("\n", "<br>")
+        script_cell = html.escape(str(row.get("판매대본", "") or "")).replace("\n", "<br>")
+        manual_cell = html.escape(str(row.get("설명서", "") or "")).replace("\n", "<br>")
+        reason_cell = html.escape(str(row.get("근거", "") or "")).replace("\n", "<br>")
         table_html.append(
             "<tr>"
             f"<td>{html.escape(str(row['항목']))}</td>"
             f"<td>{badge}</td>"
-            f"<td><span class='memo'>{memo}</span></td>"
+            f"<td><span class='memo'>{script_cell}</span></td>"
+            f"<td><span class='memo'>{manual_cell}</span></td>"
+            f"<td><span class='memo'>{reason_cell}</span></td>"
             "</tr>"
         )
     table_html.append("</tbody></table>")
