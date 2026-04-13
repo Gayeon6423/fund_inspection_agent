@@ -178,7 +178,7 @@ def main():
     st.set_page_config(page_title="펀드판매대본 점검", layout="wide")
     load_dotenv(find_dotenv(), override=True)
 
-    api_key            = get_setting("ANTHROPIC_API_KEY")
+    api_key            = get_setting("API_KEY")
     model              = get_setting("LLM_MODEL", "claude-sonnet-4-6")
     system_prompt_version = get_setting("SYSTEM_PROMPT_VERSION", "system_prompt_v5")
 
@@ -229,7 +229,7 @@ def main():
     run = st.sidebar.button("일치도 분석 실행", type="primary", use_container_width=True)
     if run:
         if not api_key:
-            st.error("ANTHROPIC_API_KEY가 설정되지 않았습니다.")
+            st.error("API_KEY가 설정되지 않았습니다.")
             st.stop()
         if script_excel is None or manual_pdf is None:
             st.error("판매대본 파일과 설명서 파일을 모두 업로드해주세요.")

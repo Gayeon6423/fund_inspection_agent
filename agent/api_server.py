@@ -31,10 +31,10 @@ logging.basicConfig(
 logger = logging.getLogger("fund-agent")
 
 # ── 환경변수 ──────────────────────────────────────────────
-api_key = os.getenv("ANTHROPIC_API_KEY")
+api_key = os.getenv("API_KEY")
 system_prompt_version = os.getenv("SYSTEM_PROMPT_VERSION", "system_prompt_v5")
 if not api_key:
-    print("에러: ANTHROPIC_API_KEY 환경변수를 먼저 설정해주세요.")
+    print("에러: API_KEY 환경변수를 먼저 설정해주세요.")
     sys.exit(1)
 
 MODEL        = os.getenv("LLM_MODEL", "claude-sonnet-4-6")
