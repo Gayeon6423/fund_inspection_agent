@@ -17,7 +17,7 @@
 │   ├── fund_core.py            ← 공유 비즈니스 로직 (LLM 호출, 비교 계산)
 │   ├── api_server_test.py      ← API 서버 테스트
 │   └── prompt/                 ← 시스템 프롬프트 버전 관리
-│       ├── system_prompt_v1.txt ~ v7.txt
+│       ├── system_prompt_v1.txt ~ v11.txt
 │
 ├── excel_json/                 ← Excel → JSON 변환 모듈
 │   └── excel_to_json.py        ← xlsx 파싱 및 구조화
@@ -43,10 +43,24 @@
 Excel 판매대본
     └─→ excel_to_json.py (xlsx 파싱)
             └─→ output_excel_json/ (JSON 저장)
-                    └─→ fund_core.py (LLM 호출: Claude / GPT)
+                    └─→ fund_core.py (LLM 호출: Claude)
                             └─→ output_agent/ (비교 결과 JSON)
                                     └─→ app.py (Streamlit 결과 표시)
 
+```
+
+### LLM 응답 포맷
+각 판매단계 KEY의 값은 3원소 배열로 반환됩니다:
+- `value[0]`: "일치" 또는 "불일치" (판정)
+- `value[1]`: 설명서에서 추출한 유사 내용 (LLM이 PDF 전문에서 직접 끌어옴)
+- `value[2]`: 일치/불일치 근거
+
+예시:
+```json
+{
+  "위험등급": ["불일치", "설명서 p.4: 6등급 매우낮은위험", "위험등급 수치가 상이함(대본 5등급 ↔ 설명서 6등급)"],
+  "환매수수료": ["일치", "설명서 p.5: 환매수수료 없음", "유동성/환매 관련 핵심 사실이 설명서와 동일"]
+}
 ```
 
 ## 1) 설치
@@ -59,19 +73,36 @@ pip install -r requirements.txt
 uv sync
 ```
 
-## 2) 환경변수 설정 (`.env`)
-`.env_example`을 복사해 `.env` 파일 생성:
+## 2) 환경변수 설정
 
-```env
-ANTHROPIC_API_KEY="your_key"
-LLM_MODEL="claude model"
+### 웹 UI (Streamlit) 환경변수
+`agent/.streamlit/secrets.toml` 파일에 설정:
+
+```toml
+API_KEY="sk-ant-..."
+LLM_MODEL="claude-sonnet-4-6"
 
 # Agent configuration
-SYSTEM_PROMPT_VERSION='system_prompt_v{version}'
+SYSTEM_PROMPT_VERSION="system_prompt_v11"
+
+# Agent Input
+INPUT_SCRIPT_FILE="판매대본.json"
+INPUT_MANUAL_FILE="상품설명서.pdf"
+```
+
+### API 서버 환경변수 (로컬 실행 시)
+`.env` 파일 생성:
+
+```env
+API_KEY="sk-ant-..."
+LLM_MODEL="claude-sonnet-4-6"
+
+# Agent configuration
+SYSTEM_PROMPT_VERSION="system_prompt_v11"
 
 # Agent Input (로컬 실행 시)
-INPUT_SCRIPT_FILE='판매대본.json'
-INPUT_MANUAL_FILE='상품설명서.pdf'
+INPUT_SCRIPT_FILE="판매대본.json"
+INPUT_MANUAL_FILE="상품설명서.pdf"
 ```
 
 ## 3) Excel -> JSON 변환
@@ -140,15 +171,67 @@ UI 기능:
 주의:
 - 업로드 파일은 반드시 **복호화된 파일**이어야 합니다.
 
-## 6) API 테스트 스크립트
+## 6) 주요 함수 및 구조
+
+### `fund_core.py` - 핵심 로직
+
+- **`call_llm_compare(script_json, manual_pdf_bytes, model, api_key, system_prompt)`**
+  - 판매대본 JSON + 설명서 PDF를 Claude API로 전송
+  - LLM이 각 항목을 검증해 응답 반환
+  - 응답: JSON 문자열 (3원소 배열 포맷)
+
+- **`parse_json_from_text(answer_text)`**
+  - LLM 응답 텍스트에서 JSON 블록 추출
+  - JSON 파싱 후 dict 반환
+
+- **`calc_match_rate(result_json)`**
+  - 비교 결과에서 "일치" 항목 개수/비율 계산
+  - 반환: `{"total": int, "matched": int, "rate": float}`
+
+- **`build_comparison_rows(result_json, script_json)`**
+  - result_json(LLM 분석) + script_json(원본 Excel) 조합
+  - UI 테이블용 행 리스트 생성
+  - 각 행: `{"항목": key, "판정": value[0], "판매대본": script_json[key], "설명서": value[1], "근거": value[2]}`
+
+### `app.py` - 웹 UI (Streamlit)
+
+**기능:**
+- 파일 업로드 (Excel, PDF)
+- 시트 선택 및 실시간 진행 상태 표시
+- 분석 완료 후 결과 표시
+
+**결과 테이블 컬럼:**
+- **항목**: Excel 판매대본의 KEY
+- **판정**: "일치" 또는 "불일치"
+- **판매대본**: Excel의 원본 값 (script_json에서 직접 취용)
+- **설명서**: LLM이 PDF 전문에서 추출한 해당 부분
+- **근거**: 판정 이유 (LLM 분석 결과)
+
+**추가 기능:**
+- CSV 다운로드: 비교 결과를 CSV로 내보내기
+- 판정 필터: "전체"/"일치"/"불일치" (표시 항목 필터링)
+
+## 7) API 테스트 스크립트
 ```bash
 python agent/api_server_test.py
 ```
 
-## 7) 문제 해결
-- `ModuleNotFoundError: excel_json`
-  - 프로젝트 루트에서 실행
-  - `streamlit run agent/app.py` 형태로 실행
-- Claude 호출 실패 시
-  - `.env`의 `ANTHROPIC_API_KEY` 확인
+## 8) 문제 해결
+
+### Streamlit 실행 오류
+- **`python-dotenv could not parse statement` / `Unbalanced quotes`**
+  - `agent/.streamlit/secrets.toml` 파일 확인
+  - 모든 문자열이 **큰따옴표(`"`)로 일관되게** 작성되었는지 확인
+  - 작은따옴표(`'`)는 TOML 파싱 오류 발생
+
+### 일반 오류
+- **`ModuleNotFoundError: excel_json`**
+  - 프로젝트 루트에서 `streamlit run agent/app.py` 형태로 실행
+
+- **Claude API 호출 실패**
+  - `agent/.streamlit/secrets.toml` 또는 `.env`의 `API_KEY` 확인
   - API 서버 로그의 `request_id` 기준으로 실패 단계 확인
+
+- **LLM 응답 파싱 실패**
+  - 시스템 프롬프트 버전 확인 (`SYSTEM_PROMPT_VERSION` 설정값)
+  - LLM이 올바른 JSON 포맷으로 반환하는지 확인
