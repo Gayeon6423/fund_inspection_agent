@@ -20,7 +20,7 @@ _prompt_path = Path(__file__).resolve().parent / "prompt" / f"{SYSTEM_PROMPT_VER
 with open(_prompt_path, encoding="utf-8") as _f:
     SYSTEM_PROMPT = _f.read().strip()
 
-META_KEYS = {"category", "summary", "summary_script", "summary_manual", "match_rate", "mismatches"}
+META_KEYS = {"category", "summary", "summary_script", "summary_manual", "mismatches"}
 
 
 # ── LLM API ────────────────────────────────────────────
@@ -79,37 +79,7 @@ def call_llm_compare(script_json: dict, manual_pdf_bytes: bytes,
 
 # ── 응답 파싱 ─────────────────────────────────────────────
 
-def parse_json_from_text(answer_text: str) -> dict:
-    """LLM 응답 텍스트에서 JSON 블록을 추출해 파싱."""
-    start = answer_text.find("{")
-    end = answer_text.rfind("}") + 1
-    if start == -1 or end == 0:
-        raise ValueError("LLM 응답에서 JSON 본문을 찾지 못했습니다.")
-    return json.loads(answer_text[start:end])
-
-
 # ── 결과 처리 ─────────────────────────────────────────────
-
-def calc_match_rate(result_json: dict):
-    """일치율(%) 계산. JSON에 match_rate 필드가 있으면 그대로 사용."""
-    if isinstance(result_json.get("match_rate"), int):
-        return result_json["match_rate"]
-
-    match_count = 0
-    total_count = 0
-    for value in result_json.values():
-        if isinstance(value, list) and value:
-            label = value[0]
-            if label in ("일치", "불일치"):
-                total_count += 1
-                if label == "일치":
-                    match_count += 1
-
-    if total_count == 0:
-        return None
-    return round((match_count / total_count) * 100)
-
-
 def _to_cell_text(value) -> str:
     """LLM 반환 필드를 표 셀 표시용 문자열로 정규화."""
     if value is None:
@@ -197,8 +167,65 @@ def summary_manual_to_text(summary_manual) -> str:
     return summary_manual if summary_manual else "-"
 
 
+
+def _extract_json_block(answer_text: str) -> str:
+    """Extract the first complete JSON object from free-form text."""
+    candidates = []
+    fence_patterns = [
+        r"```json\s*(\{.*?\})\s*```",
+        r"```\s*(\{.*?\})\s*```",
+    ]
+    for pattern in fence_patterns:
+        candidates.extend(re.findall(pattern, answer_text, flags=re.DOTALL))
+    candidates.append(answer_text)
+
+    for text in candidates:
+        start = text.find("{")
+        if start == -1:
+            continue
+
+        depth = 0
+        in_string = False
+        escaped = False
+
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
+                continue
+
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+
+    raise ValueError("LLM 응답에서 완전한 JSON 객체를 찾지 못했습니다.")
+
+
+def parse_json_from_text(answer_text: str) -> dict:
+    """LLM 응답 텍스트에서 JSON 본문을 추출해 파싱."""
+    json_text = _extract_json_block(answer_text)
+    try:
+        return json.loads(json_text)
+    except json.JSONDecodeError as e:
+        lines = json_text.splitlines()
+        bad_line = lines[e.lineno - 1] if 1 <= e.lineno <= len(lines) else ""
+        raise ValueError(
+            f"LLM JSON 파싱 실패: {e.msg} (line {e.lineno}, column {e.colno}). "
+            f"문제 줄: {bad_line[:200]}"
+        ) from e
 if __name__ == "__main__":
     # 간단한 테스트
     user_content = [{"type": "text", "text": "삼성전자의 종목코드는?"}]
     response = call_llm(user_content, MODEL, API_KEY, SYSTEM_PROMPT)
     print("LLM 응답:", response)
+
