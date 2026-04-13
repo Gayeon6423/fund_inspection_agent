@@ -17,12 +17,7 @@
 │  ├─ app.py                # Streamlit 웹 UI
 │  ├─ fund_core.py          # 핵심 분석 로직 (Claude API 호출)
 │  └─ prompt/
-│     ├─ system_prompt_v1.txt
-│     ├─ system_prompt_v2.txt
-│     ├─ system_prompt_v3.txt
-│     ├─ system_prompt_v4.txt
-│     ├─ system_prompt_v5.txt
-│     └─ system_prompt_v6.txt
+│     ├─ system_prompt_v{version}.txt
 ├─ excel_json/
 │  ├─ __init__.py
 │  └─ excel_to_json.py      # Excel -> JSON 변환
@@ -30,7 +25,7 @@
 │  ├─ output_excel_json/    # 변환된 판매대본 JSON
 │  ├─ output_agent/         # 분석 결과 JSON
 │  ├─ uploads_local/        # 로컬 실행 시 입력 파일
-│  └─ uploads_external/     # 웹 UI 업로드 파일 (타임스탬프 prefix)
+│  └─ uploads_external/     # 웹 UI 실행 시 업로드 파일
 ├─ legacy/                  # 구버전 파일 보관
 │  ├─ agent_test.py
 │  ├─ api_client_test copy.py
@@ -57,10 +52,10 @@ uv sync
 
 ```env
 ANTHROPIC_API_KEY="your_key"
-LLM_MODEL="claude-sonnet-4-6"
+LLM_MODEL="claude model"
 
 # Agent configuration
-SYSTEM_PROMPT_VERSION='system_prompt_v6'
+SYSTEM_PROMPT_VERSION='system_prompt_v{version}'
 
 # Agent Input (로컬 실행 시)
 INPUT_SCRIPT_FILE='판매대본.json'
@@ -75,7 +70,7 @@ INPUT_MANUAL_FILE='상품설명서.pdf'
 - 병합 셀로 이어진 다중 행 예시 누적
 - 현재 필터: `설명서 교부`, `설명 의무` 포함 단계만 저장
 - 기본 출력 폴더: `data/output_excel_json`
-- 출력 파일명: `원본파일명_시트명_YYYYMMDD_HHMMSS.json`
+- 출력 파일명: `YYYYMMDD_HHMMSS_원본파일명_시트명.json`
 
 예시:
 ```bash
@@ -96,7 +91,7 @@ uvicorn agent.api_server:app --reload --port 8000
 - `POST /v1/agent/fund/ask`
 - Swagger: `http://localhost:8000/docs`
 
-### 진행 로그 확인 (중요)
+### 진행 로그 확인
 `api_server.py`는 요청마다 `request_id`를 생성해 단계별 로그를 출력합니다.
 
 로그 단계 예:
@@ -108,7 +103,7 @@ uvicorn agent.api_server:app --reload --port 8000
 - 결과 저장 시작/완료
 - 요청 처리 완료/실패(소요시간)
 
-즉, 중간에 멈추면 로그에서 **어느 단계에서 실패했는지** 바로 확인 가능합니다.
+중간에 멈추면 로그에서 **어느 단계에서 실패했는지** 바로 확인 가능합니다.
 
 ## 5) 웹 UI 실행 (Streamlit)
 ```bash

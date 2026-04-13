@@ -151,7 +151,6 @@ def build_comparison_rows(result_json: dict) -> list:
                     "근거": "\n".join(str(x) for x in value[1:]) if len(value) > 1 else "",
                 })
 
-    # v3 형태 대응: mismatches만 오는 경우
     if not rows and isinstance(result_json.get("mismatches"), list):
         for item in result_json["mismatches"]:
             rows.append({"항목": "mismatches", "판정": "불일치", "근거": str(item)})

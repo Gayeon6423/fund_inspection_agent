@@ -31,7 +31,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from excel_json.excel_to_json import convert_excel_to_json_by_sheets
 from fund_core import (
-    call_claude_compare,
+    call_llm_compare,
     parse_json_from_text,
     calc_match_rate,
     build_comparison_rows,
@@ -180,13 +180,13 @@ def main():
 
     api_key            = get_setting("API_KEY")
     model              = get_setting("LLM_MODEL")
-    system_prompt_version = get_setting("SYSTEM_PROMPT_VERSION")
+    SYSTEM_PROMPT_VERSION = get_setting("SYSTEM_PROMPT_VERSION")
 
-    prompt_path = PROMPT_DIR / f"{system_prompt_version}.txt"
+    prompt_path = PROMPT_DIR / f"{SYSTEM_PROMPT_VERSION}.txt"
     if not prompt_path.exists():
         st.error(f"프롬프트 파일이 없습니다: {prompt_path}\nSYSTEM_PROMPT_VERSION 값을 확인해주세요.")
         st.stop()
-    system_prompt = prompt_path.read_text(encoding="utf-8")
+    SYSTEM_PROMPT = prompt_path.read_text(encoding="utf-8")
 
     st.markdown(
         """
@@ -294,17 +294,17 @@ def main():
                 st.session_state["analyze_status"] = analyze_status_map
                 render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
 
-                answer_text = call_claude_compare(
+                answer_text = call_llm_compare(
                     script_json=script_json,
                     manual_pdf_bytes=manual_pdf_bytes,
                     model=model,
                     api_key=api_key,
-                    system_prompt=system_prompt,
+                    system_prompt=SYSTEM_PROMPT,
                 )
                 result_json = parse_json_from_text(answer_text)
                 match_rate  = calc_match_rate(result_json)
 
-                output_path = OUTPUT_AGENT_DIR / f"web_{ts}_{safe_name(sheet)}_{system_prompt_version}.json"
+                output_path = OUTPUT_AGENT_DIR / f"web_{ts}_{safe_name(sheet)}_{SYSTEM_PROMPT_VERSION}.json"
                 output_path.write_text(json.dumps(result_json, ensure_ascii=False, indent=2), encoding="utf-8")
 
                 analysis_results.append({
