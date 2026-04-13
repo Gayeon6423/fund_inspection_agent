@@ -184,7 +184,7 @@ def main():
 
     api_key            = get_setting("API_KEY")
     model              = get_setting("LLM_MODEL")
-    SYSTEM_PROMPT_VERSION = get_setting("SYSTEM_PROMPT_VERSION", "system_prompt_v9")
+    SYSTEM_PROMPT_VERSION = get_setting("SYSTEM_PROMPT_VERSION", "system_prompt_v10")
 
     prompt_path = PROMPT_DIR / f"{SYSTEM_PROMPT_VERSION}.txt"
     if not prompt_path.exists():

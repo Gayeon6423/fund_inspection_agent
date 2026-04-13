@@ -15,7 +15,7 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
 API_KEY = os.getenv("API_KEY")
 MODEL = os.getenv("LLM_MODEL")
-SYSTEM_PROMPT_VERSION = os.getenv("SYSTEM_PROMPT_VERSION", "system_prompt_v9")
+SYSTEM_PROMPT_VERSION = os.getenv("SYSTEM_PROMPT_VERSION", "system_prompt_v10")
 _prompt_path = Path(__file__).resolve().parent / "prompt" / f"{SYSTEM_PROMPT_VERSION}.txt"
 with open(_prompt_path, encoding="utf-8") as _f:
     SYSTEM_PROMPT = _f.read().strip()
@@ -133,10 +133,8 @@ def _pick_manual_fallback(item_key: str, summary_manual) -> str:
                 hits.append(f"{k_text}: {_to_cell_text(v)}")
         if hits:
             return "\n".join(hits[:2])
-        preview = [f"{k}: {_to_cell_text(v)}" for k, v in list(summary_manual.items())[:2]]
-        return "\n".join(preview) if preview else "-"
-    if summary_manual:
-        return _to_cell_text(summary_manual)
+        # 항목 매칭 실패 시 억지 값을 채우지 않는다.
+        return "-"
     return "-"
 
 
