@@ -179,8 +179,8 @@ def main():
     load_dotenv(find_dotenv(), override=True)
 
     api_key            = get_setting("API_KEY")
-    model              = get_setting("LLM_MODEL", "claude-sonnet-4-6")
-    system_prompt_version = get_setting("SYSTEM_PROMPT_VERSION", "system_prompt_v5")
+    model              = get_setting("LLM_MODEL")
+    system_prompt_version = get_setting("SYSTEM_PROMPT_VERSION")
 
     prompt_path = PROMPT_DIR / f"{system_prompt_version}.txt"
     if not prompt_path.exists():

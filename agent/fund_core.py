@@ -10,10 +10,10 @@ import urllib.request
 META_KEYS = {"category", "summary", "summary_script", "summary_manual", "match_rate", "mismatches"}
 
 
-# ── Claude API ────────────────────────────────────────────
+# ── LLM API ────────────────────────────────────────────
 
-def call_claude(user_content: list, model: str, api_key: str, system_prompt: str) -> str:
-    """범용 Claude API 호출. user_content는 Anthropic messages content 블록 리스트."""
+def call_llm(user_content: list, model: str, api_key: str, system_prompt: str) -> str:
+    """범용 LLM API 호출. user_content는 메시지 content 블록 리스트."""
     payload = {
         "model": model,
         "max_tokens": 16000,
@@ -39,9 +39,9 @@ def call_claude(user_content: list, model: str, api_key: str, system_prompt: str
     return result["content"][0]["text"]
 
 
-def call_claude_compare(script_json: dict, manual_pdf_bytes: bytes,
+def call_llm_compare(script_json: dict, manual_pdf_bytes: bytes,
                         model: str, api_key: str, system_prompt: str) -> str:
-    """판매대본 JSON + 설명서 PDF를 Claude에 전달해 비교 분석 결과(텍스트)를 반환."""
+    """판매대본 JSON + 설명서 PDF를 LLM에 전달해 비교 분석 결과(텍스트)를 반환."""
     user_content = [
         {
             "type": "text",
@@ -56,17 +56,17 @@ def call_claude_compare(script_json: dict, manual_pdf_bytes: bytes,
             },
         },
     ]
-    return call_claude(user_content, model, api_key, system_prompt)
+    return call_llm(user_content, model, api_key, system_prompt)
 
 
 # ── 응답 파싱 ─────────────────────────────────────────────
 
 def parse_json_from_text(answer_text: str) -> dict:
-    """Claude 응답 텍스트에서 JSON 블록을 추출해 파싱."""
+    """LLM 응답 텍스트에서 JSON 블록을 추출해 파싱."""
     start = answer_text.find("{")
     end = answer_text.rfind("}") + 1
     if start == -1 or end == 0:
-        raise ValueError("Claude 응답에서 JSON 본문을 찾지 못했습니다.")
+        raise ValueError("LLM 응답에서 JSON 본문을 찾지 못했습니다.")
     return json.loads(answer_text[start:end])
 
 

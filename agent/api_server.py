@@ -37,7 +37,7 @@ if not api_key:
     print("에러: API_KEY 환경변수를 먼저 설정해주세요.")
     sys.exit(1)
 
-MODEL        = os.getenv("LLM_MODEL", "claude-sonnet-4-6")
+MODEL        = os.getenv("LLM_MODEL")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR   = PROJECT_ROOT / "data" / "output_agent"
 
@@ -46,13 +46,13 @@ with open(_prompt_path, encoding="utf-8") as _f:
     SYSTEM_PROMPT = _f.read().strip()
 
 # ── fund_core import ──────────────────────────────────────
-from fund_core import call_claude, parse_json_from_text
+from fund_core import call_llm, parse_json_from_text
 
 # ── FastAPI 앱 ────────────────────────────────────────────
 app = FastAPI(
     title="Fund Agent API",
     version="1.0.0",
-    description="Claude 기반 펀드 AI 에이전트 API",
+    description="LLM 기반 펀드 AI 에이전트 API",
 )
 
 # ── 요청 스키마 ───────────────────────────────────────────
@@ -158,10 +158,10 @@ def ask(body: AskRequest):
 
     try:
         user_content = build_user_content(body, request_id)
-        answer = call_claude(user_content, MODEL, api_key, SYSTEM_PROMPT)
+        answer = call_llm(user_content, MODEL, api_key, SYSTEM_PROMPT)
 
         log_step(request_id, "응답 JSON 파싱 시작")
-        log_step(request_id, "Claude 응답 미리보기", answer[:300].replace("\n", " "))
+        log_step(request_id, "LLM 응답 미리보기", answer[:300].replace("\n", " "))
         try:
             parsed = parse_json_from_text(answer)
         except (ValueError, json.JSONDecodeError) as e:
