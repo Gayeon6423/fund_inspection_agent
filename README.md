@@ -11,30 +11,42 @@
 ## 폴더 구조
 ```text
 .
-├─ agent/
-│  ├─ api_server.py         # FastAPI 서버 (비교 분석 API)
-│  ├─ api_server_test.py    # API 테스트 스크립트
-│  ├─ app.py                # Streamlit 웹 UI
-│  ├─ fund_core.py          # 핵심 분석 로직 (Claude API 호출)
-│  └─ prompt/
-│     ├─ system_prompt_v{version}.txt
-├─ excel_json/
-│  ├─ __init__.py
-│  └─ excel_to_json.py      # Excel -> JSON 변환
-├─ data/
-│  ├─ output_excel_json/    # 변환된 판매대본 JSON
-│  ├─ output_agent/         # 분석 결과 JSON
-│  ├─ uploads_local/        # 로컬 실행 시 입력 파일
-│  └─ uploads_external/     # 웹 UI 실행 시 업로드 파일
-├─ legacy/                  # 구버전 파일 보관
-│  ├─ agent_test.py
-│  ├─ api_client_test copy.py
-│  └─ api_server copy.py
-├─ pyproject.toml
-├─ requirements.txt
-├─ uv.lock
-├─ .env
-└─ .env_example
+├── agent/                      ← 메인 애플리케이션
+│   ├── app.py                  ← Streamlit 웹 UI (사용자 인터페이스)
+│   ├── api_server.py           ← FastAPI REST API 서버
+│   ├── fund_core.py            ← 공유 비즈니스 로직 (LLM 호출, 비교 계산)
+│   ├── api_server_test.py      ← API 서버 테스트
+│   └── prompt/                 ← 시스템 프롬프트 버전 관리
+│       ├── system_prompt_v1.txt ~ v7.txt
+│
+├── excel_json/                 ← Excel → JSON 변환 모듈
+│   └── excel_to_json.py        ← xlsx 파싱 및 구조화
+│
+├── data/                       ← 데이터 저장소
+│   ├── uploads_external/       ← 웹 UI에서 업로드된 파일
+│   ├── uploads_local/          ← 로컬에서 입력된 파일
+│   ├── output_excel_json/      ← Excel → JSON 변환 결과물
+│   └── output_agent/           ← LLM 분석 결과물 (JSON)
+│
+├── legacy/                     ← 구버전 코드 (참고용 보관)
+│   ├── agent_test.py
+│   ├── api_client_test copy.py
+│   └── api_server copy.py
+│
+├── .env / .env_example         ← API 키, 모델 설정
+├── pyproject.toml / uv.lock    ← 패키지 의존성 (uv 관리)
+└── requirements.txt            ← fastapi, uvicorn, streamlit, python-dotenv
+```
+### 데이터 흐름
+```text
+
+Excel 판매대본
+    └─→ excel_to_json.py (xlsx 파싱)
+            └─→ output_excel_json/ (JSON 저장)
+                    └─→ fund_core.py (LLM 호출: Claude / GPT)
+                            └─→ output_agent/ (비교 결과 JSON)
+                                    └─→ app.py (Streamlit 결과 표시)
+
 ```
 
 ## 1) 설치
@@ -78,7 +90,7 @@ INPUT_MANUAL_FILE='상품설명서.pdf'
 python excel_json/excel_to_json.py "사모_판매대본_라이프META일반사모투자신탁 제2호.xlsx" --sheets "사모펀드(내점)" "사모펀드(방문)"
 
 # 공모펀드
-python excel_json/excel_to_json.py "공모펀드_판매대본_JPMorgan.xlsx" --sheets "공모펀드(내점)" "공모펀드(유선)" "공모펀드(방문)"
+python excel_json/excel_to_json.py "공모펀드_판매대본_한국투자JPMorgan.xlsx" --sheets "공모펀드(내점)" "공모펀드(유선)" "공모펀드(방문)"
 ```
 
 ## 4) API 서버 실행 (FastAPI)
