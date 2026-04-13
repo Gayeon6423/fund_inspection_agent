@@ -160,9 +160,9 @@ def render_comparison_table(rows, verdict_filter: str):
     for row in rows:
         verdict = row["판정"]
         badge = "<span class='badge-ok'>일치</span>" if verdict == "일치" else "<span class='badge-no'>불일치</span>"
-        script_cell = html.escape(str(row.get("판매대본", "") or "")).replace("\n", "<br>")
-        manual_cell = html.escape(str(row.get("설명서", "") or "")).replace("\n", "<br>")
-        reason_cell = html.escape(str(row.get("근거", "") or "")).replace("\n", "<br>")
+        script_cell = html.escape(str(row.get("판매대본", "-") or "-")).replace("\n", "<br>")
+        manual_cell = html.escape(str(row.get("설명서", "-") or "-")).replace("\n", "<br>")
+        reason_cell = html.escape(str(row.get("근거", "-") or "-")).replace("\n", "<br>")
         table_html.append(
             "<tr>"
             f"<td>{html.escape(str(row['항목']))}</td>"
@@ -184,7 +184,7 @@ def main():
 
     api_key            = get_setting("API_KEY")
     model              = get_setting("LLM_MODEL")
-    SYSTEM_PROMPT_VERSION = get_setting("SYSTEM_PROMPT_VERSION")
+    SYSTEM_PROMPT_VERSION = get_setting("SYSTEM_PROMPT_VERSION", "system_prompt_v9")
 
     prompt_path = PROMPT_DIR / f"{SYSTEM_PROMPT_VERSION}.txt"
     if not prompt_path.exists():
@@ -313,6 +313,7 @@ def main():
 
                 analysis_results.append({
                     "sheet": sheet,
+                    "script_json": script_json,
                     "match_rate": match_rate,
                     "result_json": result_json,
                     "output_path": str(output_path),
@@ -381,7 +382,11 @@ def main():
     result_json    = selected["result_json"]
 
     st.markdown("---")
-    rows = build_comparison_rows(result_json)
+    rows = build_comparison_rows(
+        result_json=result_json,
+        script_json=selected.get("script_json"),
+        summary_manual=result_json.get("summary_manual"),
+    )
     filter_col, btn_col = st.columns([3, 1])
     with filter_col:
         verdict_filter = st.radio(" ", options=["전체", "일치", "불일치"], horizontal=True, key="verdict_filter")
