@@ -562,7 +562,7 @@ def main():
         unsafe_allow_html=True,
     )
     uploaded_prompt_file = st.sidebar.file_uploader(
-        "• 사용자 프롬프트 파일 업로드 (.txt)",
+        "• 사용자 프롬프트 파일 업로드 (.txt/.md)",
         type=["txt", "md"],
         key="uploaded_prompt_file",
     )
@@ -580,9 +580,9 @@ def main():
         st.sidebar.caption(f"현재 프롬프트: 업로드 파일 ({uploaded_prompt_file.name})")
     else:
         st.sidebar.caption(f"현재 프롬프트: 기본 ({SYSTEM_PROMPT_VERSION}.txt)")
-    # st.sidebar.warning("복호화된 파일만 업로드해주세요")
+
     script_excel = st.sidebar.file_uploader("• 판매대본 파일 업로드 (.xlsx)", type=["xlsx"])
-    manual_pdf   = st.sidebar.file_uploader("• 설명서 파일 업로드 (.pdf)", type=["pdf"])
+    manual_pdf = st.sidebar.file_uploader("• 설명서 파일 업로드 (.pdf)", type=["pdf"])
     if script_excel is not None:
         render_full_filename_in_sidebar("판매대본 파일명", script_excel.name)
     if manual_pdf is not None:
