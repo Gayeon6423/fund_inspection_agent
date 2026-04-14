@@ -184,13 +184,15 @@ def main():
 
     api_key            = get_setting("API_KEY")
     model              = get_setting("LLM_MODEL")
-    SYSTEM_PROMPT_VERSION = get_setting("SYSTEM_PROMPT_VERSION", "system_prompt_v10")
+    SYSTEM_PROMPT_VERSION = get_setting("SYSTEM_PROMPT_VERSION", "system_prompt_v11")
 
     prompt_path = PROMPT_DIR / f"{SYSTEM_PROMPT_VERSION}.txt"
     if not prompt_path.exists():
         st.error(f"프롬프트 파일이 없습니다: {prompt_path}\nSYSTEM_PROMPT_VERSION 값을 확인해주세요.")
         st.stop()
-    SYSTEM_PROMPT = prompt_path.read_text(encoding="utf-8")
+    default_system_prompt = prompt_path.read_text(encoding="utf-8").strip()
+    active_system_prompt = default_system_prompt
+    active_prompt_tag = SYSTEM_PROMPT_VERSION
 
     st.markdown(
         """
@@ -207,6 +209,157 @@ def main():
         """,
         unsafe_allow_html=True,
     )
+
+    st.sidebar.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] {
+            background: rgba(107,114,128,0.14);
+            border: 1px solid rgba(128,128,128,0.35);
+            border-radius: 14px;
+            padding: 10px 12px 8px 12px;
+            margin-bottom: 14px;
+        }
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] label {
+            border: none;
+            border-radius: 0;
+            padding: 4px 2px;
+            margin-bottom: 2px;
+            background: transparent;
+        }
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] label p {
+            font-size: 15px !important;
+            font-weight: 600 !important;
+        }
+        .sidebar-menu-title {
+            font-size: 32px;
+            font-weight: 800;
+            margin: 0 0 8px 2px;
+            line-height: 1.1;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.sidebar.markdown("<div class='sidebar-menu-title'>메뉴</div>", unsafe_allow_html=True)
+    page_mode = st.sidebar.radio(
+        "메뉴",
+        options=["일치도 분석", "프롬프트 수정"],
+        index=0,
+        label_visibility="collapsed",
+    )
+    if page_mode == "프롬프트 수정":
+        st.subheader("프롬프트 수정")
+        st.info("수정한 프롬프트를 기반으로 일치도 분석을 다시 시도해보세요!")
+
+        PROMPT_DIR.mkdir(parents=True, exist_ok=True)
+        prompt_files = sorted(
+            [p for p in PROMPT_DIR.iterdir() if p.is_file() and p.suffix.lower() in {".txt", ".md"}],
+            key=lambda p: p.name,
+        )
+
+        left_col, right_col = st.columns(2)
+
+        with left_col:
+            st.markdown("### 프롬프트 조회")
+            if not prompt_files:
+                st.warning("agent/prompt 폴더에 조회 가능한 프롬프트 파일이 없습니다.")
+            else:
+                default_name = f"{SYSTEM_PROMPT_VERSION}.txt"
+                default_idx = 0
+                for i, p in enumerate(prompt_files):
+                    if p.name == default_name:
+                        default_idx = i
+                        break
+                selected_prompt_name = st.selectbox(
+                    "파일 선택",
+                    options=[p.name for p in prompt_files],
+                    index=default_idx,
+                    key="prompt_view_select",
+                )
+                selected_prompt_path = PROMPT_DIR / selected_prompt_name
+                try:
+                    selected_prompt_text = selected_prompt_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    st.error(f"프롬프트 파일을 읽지 못했습니다: {e}")
+                    selected_prompt_text = ""
+                st.text_area(
+                    "선택한 프롬프트 내용",
+                    value=selected_prompt_text,
+                    height=520,
+                    disabled=True,
+                )
+
+        with right_col:
+            st.markdown("### 프롬프트 저장")
+            save_filename = st.text_input(
+                "파일명",
+                value="",
+                placeholder="예: system_prompt_v12.txt",
+                key="prompt_save_filename",
+            )
+            save_content = st.text_area(
+                "프롬프트 내용 입력",
+                value="",
+                height=520,
+                key="prompt_save_content",
+            )
+            download_filename_input = Path((save_filename or "").strip()).name
+            if download_filename_input:
+                download_filename = safe_name(download_filename_input)
+                if "." not in download_filename:
+                    download_filename = f"{download_filename}.txt"
+            else:
+                download_filename = "prompt.txt"
+            st.download_button(
+                "txt 다운로드",
+                data=save_content.encode("utf-8"),
+                file_name=download_filename,
+                mime="text/plain",
+                use_container_width=True,
+                disabled=not save_content.strip(),
+                key="prompt_download_btn",
+            )
+
+            if st.button("저장", type="primary", use_container_width=True, key="prompt_save_btn"):
+                filename_input = Path((save_filename or "").strip()).name
+                if not filename_input:
+                    st.error("저장할 파일명을 입력해주세요.")
+                elif not save_content.strip():
+                    st.error("저장할 프롬프트 내용을 입력해주세요.")
+                else:
+                    safe_filename = safe_name(filename_input)
+                    if "." not in safe_filename:
+                        safe_filename = f"{safe_filename}.txt"
+                    if Path(safe_filename).suffix.lower() not in {".txt", ".md"}:
+                        st.error("프롬프트 파일 확장자는 .txt 또는 .md만 가능합니다.")
+                    else:
+                        save_path = PROMPT_DIR / safe_filename
+                        save_path.write_text(save_content, encoding="utf-8")
+                        st.success(f"저장 완료: {save_path}")
+                        st.rerun()
+        return
+
+    uploaded_prompt_file = st.sidebar.file_uploader(
+        "• 사용자 프롬프트 파일 업로드 (.txt)",
+        type=["txt", "md"],
+        key="uploaded_prompt_file",
+    )
+    if uploaded_prompt_file is not None:
+        try:
+            uploaded_prompt_text = uploaded_prompt_file.getvalue().decode("utf-8").strip()
+        except UnicodeDecodeError:
+            st.error("업로드한 프롬프트 파일은 UTF-8 인코딩이어야 합니다.")
+            st.stop()
+        if not uploaded_prompt_text:
+            st.error("업로드한 프롬프트 파일 내용이 비어 있습니다.")
+            st.stop()
+        active_system_prompt = uploaded_prompt_text
+        active_prompt_tag = f"upload_{safe_name(Path(uploaded_prompt_file.name).stem)}"
+        st.sidebar.caption(f"현재 프롬프트: 업로드 파일 ({uploaded_prompt_file.name})")
+    else:
+        st.sidebar.caption(f"현재 프롬프트: 기본 ({SYSTEM_PROMPT_VERSION}.txt)")
 
     st.sidebar.markdown(
         "### 파일 업로드 (<span style='color:#ff4b4b;'>복호화</span> 파일만 가능)",
@@ -304,17 +457,39 @@ def main():
                 st.session_state["analyze_status"] = analyze_status_map
                 render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
 
-                answer_text = call_llm_compare(
-                    script_json=script_json,
-                    manual_pdf_bytes=manual_pdf_bytes,
-                    model=model,
-                    api_key=api_key,
-                    system_prompt=SYSTEM_PROMPT,
-                )
-                result_json = parse_json_from_text(answer_text)
+                max_attempts = 3
+                result_json = None
+                last_error = None
+                for attempt in range(1, max_attempts + 1):
+                    try:
+                        answer_text = call_llm_compare(
+                            script_json=script_json,
+                            manual_pdf_bytes=manual_pdf_bytes,
+                            model=model,
+                            api_key=api_key,
+                            system_prompt=active_system_prompt,
+                        )
+                        result_json = parse_json_from_text(answer_text)
+                        break
+                    except (ValueError, json.JSONDecodeError) as e:
+                        last_error = e
+                        if attempt < max_attempts:
+                            timer_ph.warning(
+                                f"⚠️ [{sheet}] 응답 파싱 실패로 재시도 중 ({attempt}/{max_attempts})"
+                            )
+                            time.sleep(1)
+                        else:
+                            raise RuntimeError(
+                                f"LLM 응답 JSON 파싱 실패 (최대 {max_attempts}회 시도): {e}"
+                            ) from e
+
+                if result_json is None and last_error is not None:
+                    raise RuntimeError(
+                        f"LLM 응답 JSON 파싱 실패 (최대 {max_attempts}회 시도): {last_error}"
+                    )
                 match_rate  = calc_match_rate(result_json)
 
-                output_path = OUTPUT_AGENT_DIR / f"web_{ts}_{safe_name(sheet)}_{SYSTEM_PROMPT_VERSION}.json"
+                output_path = OUTPUT_AGENT_DIR / f"web_{ts}_{safe_name(sheet)}_{active_prompt_tag}.json"
                 output_path.write_text(json.dumps(result_json, ensure_ascii=False, indent=2), encoding="utf-8")
 
                 analysis_results.append({
@@ -365,8 +540,8 @@ def main():
         for idx, item in enumerate(chunk):
             with cols[idx]:
                 is_selected  = st.session_state["selected_sheet"] == item["sheet"]
-                border_color = "#2563eb" if is_selected else "rgba(128,128,128,0.2)"
-                bg_color     = "rgba(37,99,235,0.08)" if is_selected else "var(--secondary-background-color)"
+                border_color = "#9ca3af" if is_selected else "rgba(128,128,128,0.2)"
+                bg_color     = "rgba(107,114,128,0.14)" if is_selected else "var(--secondary-background-color)"
                 st.markdown(
                     f"""
                     <div style="border:2px solid {border_color}; border-radius:12px; padding:10px 14px;
