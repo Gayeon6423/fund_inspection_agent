@@ -208,7 +208,11 @@ def main():
         unsafe_allow_html=True,
     )
 
-    st.sidebar.warning("복호화된 파일만 업로드해주세요")
+    st.sidebar.markdown(
+        "### 파일 업로드 (<span style='color:#ff4b4b;'>복호화</span> 파일만 가능)",
+        unsafe_allow_html=True,
+    )
+    # st.sidebar.warning("복호화된 파일만 업로드해주세요")
     script_excel = st.sidebar.file_uploader("• 판매대본 파일 업로드 (Excel)", type=["xlsx"])
     manual_pdf   = st.sidebar.file_uploader("• 설명서 파일 업로드 (PDF)", type=["pdf"])
 
@@ -247,8 +251,10 @@ def main():
         OUTPUT_AGENT_DIR.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        excel_upload_path = UPLOAD_DIR / f"{ts}_{safe_name(script_excel.name)}"
-        pdf_upload_path   = UPLOAD_DIR / f"{ts}_{safe_name(manual_pdf.name)}"
+        run_upload_dir = UPLOAD_DIR / ts
+        run_upload_dir.mkdir(parents=True, exist_ok=True)
+        excel_upload_path = run_upload_dir / safe_name(script_excel.name)
+        pdf_upload_path = run_upload_dir / safe_name(manual_pdf.name)
         excel_upload_path.write_bytes(script_excel.getvalue())
         manual_pdf_bytes = manual_pdf.getvalue()
         pdf_upload_path.write_bytes(manual_pdf_bytes)
