@@ -1,4 +1,5 @@
 import csv
+import base64
 import html
 import json
 import os
@@ -13,6 +14,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 try:
     from streamlit.runtime.scriptrunner import add_script_run_ctx
@@ -43,6 +45,7 @@ NS_REL_OFFICE = "http://schemas.openxmlformats.org/officeDocument/2006/relations
 NS_REL_PACKAGE = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 UPLOAD_DIR            = PROJECT_ROOT / "data" / "uploads_external"
+LOCAL_UPLOAD_DIR      = PROJECT_ROOT / "data" / "uploads_local"
 OUTPUT_EXCEL_JSON_DIR = PROJECT_ROOT / "data" / "output_excel_json"
 OUTPUT_AGENT_DIR      = PROJECT_ROOT / "data" / "output_agent"
 PROMPT_DIR            = Path(__file__).resolve().parent / "prompt"
@@ -81,6 +84,56 @@ def rows_to_csv(rows: list) -> bytes:
     writer.writeheader()
     writer.writerows(rows)
     return output.getvalue().encode("utf-8-sig")
+
+
+def to_preview_text(value) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    return str(value)
+
+
+def render_pdf_preview(pdf_bytes: bytes, height: int = 760):
+    """PDF 미리보기. st.pdf 지원 시 우선 사용하고, 없으면 PDF.js로 렌더."""
+    if hasattr(st, "pdf"):
+        try:
+            st.pdf(pdf_bytes)
+            return
+        except Exception:
+            pass
+
+    pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    viewer_html = f"""
+    <div id="pdf-container" style="width:100%; height:{height}px; overflow:auto; border:1px solid rgba(128,128,128,0.25); border-radius:8px; background:white;"></div>
+    <script type="module">
+      import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs";
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+
+      const raw = atob("{pdf_b64}");
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) {{
+        bytes[i] = raw.charCodeAt(i);
+      }}
+
+      const container = document.getElementById("pdf-container");
+      const loadingTask = pdfjsLib.getDocument({{ data: bytes }});
+      const pdf = await loadingTask.promise;
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {{
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({{ scale: 1.25 }});
+        const canvas = document.createElement("canvas");
+        canvas.style.display = "block";
+        canvas.style.margin = "10px auto";
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext("2d");
+        await page.render({{ canvasContext: context, viewport }}).promise;
+        container.appendChild(canvas);
+      }}
+    </script>
+    """
+    components.html(viewer_html, height=height + 20, scrolling=True)
 
 
 # ── UI 컴포넌트 ───────────────────────────────────────────
@@ -245,11 +298,157 @@ def main():
     st.sidebar.markdown("<div class='sidebar-menu-title'>메뉴</div>", unsafe_allow_html=True)
     page_mode = st.sidebar.radio(
         "메뉴",
-        options=["일치도 분석", "프롬프트 수정"],
+        options=["일치도 분석", "프롬프트 수정", "데이터 및 로그"],
         index=0,
         label_visibility="collapsed",
     )
-    if page_mode == "프롬프트 수정":
+    if page_mode == "데이터 및 로그":
+        st.subheader("데이터 및 로그")
+        left_col, right_col = st.columns(2)
+
+        with left_col:
+            st.markdown("### 데이터 조회")
+            LOCAL_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            local_files = sorted([p for p in LOCAL_UPLOAD_DIR.iterdir() if p.is_file()], key=lambda p: p.name)
+            if not local_files:
+                st.info("data/uploads_local 폴더에 파일이 없습니다.")
+            else:
+                selected_data_name = st.selectbox(
+                    "데이터 파일 선택",
+                    options=[p.name for p in local_files],
+                    key="data_logs_data_file",
+                )
+                selected_data_path = LOCAL_UPLOAD_DIR / selected_data_name
+                st.caption(f"경로: {selected_data_path}")
+                suffix = selected_data_path.suffix.lower()
+
+                if suffix == ".xlsx":
+                    try:
+                        xlsx_bytes = selected_data_path.read_bytes()
+                        st.download_button(
+                            "엑셀 다운로드",
+                            data=xlsx_bytes,
+                            file_name=selected_data_path.name,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                            key="data_logs_xlsx_download",
+                        )
+                    except Exception as e:
+                        st.error(f"엑셀 파일 읽기에 실패했습니다: {e}")
+                        xlsx_bytes = b""
+
+                    try:
+                        sheet_names = parse_sheet_names_from_xlsx_bytes(xlsx_bytes if xlsx_bytes else selected_data_path.read_bytes())
+                    except Exception as e:
+                        st.error(f"시트 목록을 읽지 못했습니다: {e}")
+                        sheet_names = []
+                    if sheet_names:
+                        selected_sheet = st.selectbox(
+                            "시트명 선택",
+                            options=sheet_names,
+                            key="data_logs_sheet_name",
+                        )
+                        if st.button("표 확인", use_container_width=True, key="data_logs_preview_btn"):
+                            try:
+                                OUTPUT_EXCEL_JSON_DIR.mkdir(parents=True, exist_ok=True)
+                                conversion = convert_excel_to_json_by_sheets(
+                                    input_path=selected_data_path,
+                                    sheet_names=[selected_sheet],
+                                    output_dir=OUTPUT_EXCEL_JSON_DIR,
+                                )[0]
+                                payload = json.loads(Path(conversion["output_path"]).read_text(encoding="utf-8"))
+                                preview_rows = [{"항목": k, "내용": to_preview_text(v)} for k, v in payload.items()]
+                                st.session_state["data_logs_preview_rows"] = preview_rows
+                                st.session_state["data_logs_preview_key"] = f"{selected_data_name}::{selected_sheet}"
+                            except Exception as e:
+                                st.error(f"표 생성에 실패했습니다: {e}")
+
+                        preview_key = f"{selected_data_name}::{selected_sheet}"
+                        if st.session_state.get("data_logs_preview_key") == preview_key:
+                            preview_rows = st.session_state.get("data_logs_preview_rows", [])
+                            if preview_rows:
+                                st.dataframe(preview_rows, use_container_width=True, hide_index=True)
+                            else:
+                                st.info("표시할 데이터가 없습니다.")
+                    else:
+                        st.warning("선택한 엑셀 파일에서 시트를 찾지 못했습니다.")
+                elif suffix == ".json":
+                    try:
+                        payload = json.loads(selected_data_path.read_text(encoding="utf-8"))
+                        if isinstance(payload, dict):
+                            preview_rows = [{"항목": k, "내용": to_preview_text(v)} for k, v in payload.items()]
+                            st.dataframe(preview_rows, use_container_width=True, hide_index=True)
+                        elif isinstance(payload, list):
+                            st.dataframe(payload, use_container_width=True, hide_index=True)
+                        else:
+                            st.text_area("JSON 내용", value=to_preview_text(payload), height=420, disabled=True)
+                    except Exception as e:
+                        st.error(f"JSON 파일 읽기에 실패했습니다: {e}")
+                elif suffix == ".csv":
+                    csv_rows = None
+                    for enc in ("utf-8-sig", "cp949", "euc-kr"):
+                        try:
+                            with selected_data_path.open("r", encoding=enc, newline="") as f:
+                                csv_rows = list(csv.DictReader(f))
+                            break
+                        except Exception:
+                            continue
+                    if csv_rows is None:
+                        st.error("CSV 파일 인코딩을 해석하지 못했습니다.")
+                    elif not csv_rows:
+                        st.info("CSV 파일에 데이터가 없습니다.")
+                    else:
+                        st.dataframe(csv_rows, use_container_width=True, hide_index=True)
+                elif suffix == ".pdf":
+                    try:
+                        pdf_bytes = selected_data_path.read_bytes()
+                        st.download_button(
+                            "PDF 다운로드",
+                            data=pdf_bytes,
+                            file_name=selected_data_path.name,
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key="data_logs_pdf_download",
+                        )
+                        render_pdf_preview(pdf_bytes, height=760)
+                    except Exception as e:
+                        st.error(f"PDF 파일 미리보기에 실패했습니다: {e}")
+                else:
+                    st.info("표 미리보기는 xlsx/json/csv 형식만 지원합니다.")
+
+        with right_col:
+            st.markdown("### 로그 조회")
+            OUTPUT_AGENT_DIR.mkdir(parents=True, exist_ok=True)
+            log_files = sorted(
+                [p for p in OUTPUT_AGENT_DIR.iterdir() if p.is_file()],
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            if not log_files:
+                st.info("data/output_agent 폴더에 로그 파일이 없습니다.")
+            else:
+                selected_log_name = st.selectbox(
+                    "로그 파일 선택",
+                    options=[p.name for p in log_files],
+                    key="data_logs_log_file",
+                )
+                selected_log_path = OUTPUT_AGENT_DIR / selected_log_name
+                st.caption(f"경로: {selected_log_path}")
+                try:
+                    if selected_log_path.suffix.lower() == ".json":
+                        st.json(json.loads(selected_log_path.read_text(encoding="utf-8")))
+                    else:
+                        st.text_area(
+                            "로그 내용",
+                            value=selected_log_path.read_text(encoding="utf-8", errors="replace"),
+                            height=520,
+                            disabled=True,
+                        )
+                except Exception as e:
+                    st.error(f"로그 파일을 읽지 못했습니다: {e}")
+
+        return
+    elif page_mode == "프롬프트 수정":
         st.subheader("프롬프트 수정")
         st.info("수정한 프롬프트를 기반으로 일치도 분석을 다시 시도해보세요!")
 
