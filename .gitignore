@@ -29,12 +29,12 @@ secrets.toml
 legacy/
 
 # Generated outputs
-data/output_agent/
+# data/output_agent/
 data/output_excel_json/
 data/uploads_external/
-data/uploads_local/
+# data/uploads_local/
 
 # Raw input files (민감 데이터)
-data/**/*.pdf
-data/**/*.xlsx
-data/**/*.csv
+# data/**/*.pdf
+# data/**/*.xlsx
+# data/**/*.csv
