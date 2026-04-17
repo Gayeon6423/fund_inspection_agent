@@ -806,7 +806,30 @@ def main():
     st.subheader("요약 정보")
     summary_script = result_json.get("summary_script") or result_json.get("summary", "-")
     summary_manual = summary_manual_to_text(result_json.get("summary_manual"))
-    left, right = st.columns(2)
+    match_rate_raw = selected.get("match_rate")
+    if isinstance(match_rate_raw, dict):
+        match_rate = match_rate_raw.get("rate")
+    else:
+        match_rate = match_rate_raw
+    rate_col, left, right = st.columns(3)
+    with rate_col:
+        if match_rate is not None:
+            color = "#065f46" if match_rate >= 70 else "#991b1b"
+            bg = "#d1fae5" if match_rate >= 70 else "#fee2e2"
+        else:
+            color = "var(--text-color)"
+            bg = "var(--secondary-background-color)"
+        rate_text = f"{match_rate}%" if match_rate is not None else "-"
+        st.markdown(
+            f"""
+            <div style="border:1px solid rgba(128,128,128,0.2); border-radius:14px; padding:14px;
+                        background:{bg}; text-align:center; height:100%;">
+              <div style="font-size:14px; color:{color}; opacity:0.85; margin-bottom:6px;">일치율</div>
+              <div style="font-size:32px; font-weight:800; color:{color};">{rate_text}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     with left:
         render_info_block("판매대본 요약", summary_script)
     with right:
