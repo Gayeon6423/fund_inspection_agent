@@ -22,13 +22,62 @@ from pydantic import BaseModel
 from dotenv import load_dotenv, find_dotenv
 from excel_json.excel_to_json import convert_excel_to_json_by_sheets
 
+PROJECT_ROOT = _PROJECT_ROOT
+OUTPUT_DIR = PROJECT_ROOT / "data" / "output_agent"
+LOG_DIR = PROJECT_ROOT / "data" / "log"
+
+
+class DailyFileHandler(logging.Handler):
+    """Write logs to data/log/YYYY-MM-DD.log and rotate automatically by date."""
+
+    def __init__(self, log_dir: Path):
+        super().__init__()
+        self.log_dir = log_dir
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self._current_date = ""
+        self._stream = None
+
+    def _ensure_stream(self):
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        if self._stream is not None and self._current_date == current_date:
+            return
+        if self._stream is not None:
+            self._stream.close()
+        self._current_date = current_date
+        self._stream = (self.log_dir / f"{self._current_date}.log").open("a", encoding="utf-8")
+
+    def emit(self, record):
+        try:
+            self._ensure_stream()
+            if self._stream is None:
+                return
+            self._stream.write(self.format(record) + "\n")
+            self._stream.flush()
+        except Exception:
+            self.handleError(record)
+
+    def close(self):
+        if self._stream is not None:
+            self._stream.close()
+            self._stream = None
+        super().close()
+
+
 load_dotenv(find_dotenv(), override=True)
 
+LOG_FORMAT = "%(asctime)s | %(levelname)s | %(message)s"
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
+    format=LOG_FORMAT,
 )
 logger = logging.getLogger("fund-agent")
+logger.setLevel(logging.INFO)
+if not any(isinstance(handler, DailyFileHandler) for handler in logger.handlers):
+    daily_file_handler = DailyFileHandler(LOG_DIR)
+    daily_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    logger.addHandler(daily_file_handler)
+# 서버 기동 직후에도 오늘 날짜 로그 파일이 존재하도록 보장
+(LOG_DIR / f"{datetime.now().strftime('%Y-%m-%d')}.log").touch(exist_ok=True)
 
 # ── 환경변수 ──────────────────────────────────────────────
 API_KEY = os.getenv("API_KEY")
@@ -37,9 +86,7 @@ if not API_KEY:
     print("에러: API_KEY 환경변수를 먼저 설정해주세요.")
     sys.exit(1)
 
-MODEL        = os.getenv("LLM_MODEL")
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_DIR   = PROJECT_ROOT / "data" / "output_agent"
+MODEL = os.getenv("LLM_MODEL")
 
 _prompt_path = Path(__file__).resolve().parent / "prompt" / f"{SYSTEM_PROMPT_VERSION}.txt"
 with open(_prompt_path, encoding="utf-8") as _f:

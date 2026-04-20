@@ -34,4 +34,4 @@ legacy/
 # data/uploads_local/
 
 data/uploads_external/
-
+data/log/*.log

@@ -48,6 +48,7 @@ UPLOAD_DIR            = PROJECT_ROOT / "data" / "uploads_external"
 LOCAL_UPLOAD_DIR      = PROJECT_ROOT / "data" / "uploads_local"
 OUTPUT_EXCEL_JSON_DIR = PROJECT_ROOT / "data" / "output_excel_json"
 OUTPUT_AGENT_DIR      = PROJECT_ROOT / "data" / "output_agent"
+APP_LOG_DIR           = PROJECT_ROOT / "data" / "log"
 PROMPT_DIR            = Path(__file__).resolve().parent / "prompt"
 
 
@@ -355,35 +356,69 @@ def render_data_page():
 
 def render_log_page():
     st.markdown("### 로그 조회")
-    OUTPUT_AGENT_DIR.mkdir(parents=True, exist_ok=True)
-    log_files = sorted(
-        [p for p in OUTPUT_AGENT_DIR.iterdir() if p.is_file()],
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
+    log_type = st.radio(
+        "로그 종류",
+        options=["서버 실행 로그(.log)", "분석 결과(JSON)"],
+        horizontal=True,
+        key="data_logs_type",
     )
-    if not log_files:
-        st.info("data/output_agent 폴더에 로그 파일이 없습니다.")
-        return
 
-    selected_log_name = st.selectbox(
-        "로그 파일 선택",
-        options=[p.name for p in log_files],
-        key="data_logs_log_file",
-    )
-    selected_log_path = OUTPUT_AGENT_DIR / selected_log_name
-    # st.caption(f"경로: {selected_log_path}")
-    try:
-        if selected_log_path.suffix.lower() == ".json":
-            st.json(json.loads(selected_log_path.read_text(encoding="utf-8")))
-        else:
+    if log_type == "서버 실행 로그(.log)":
+        APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        runtime_logs = sorted(
+            [p for p in APP_LOG_DIR.glob("*.log") if p.is_file()],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if not runtime_logs:
+            st.info("data/log 폴더에 .log 파일이 없습니다.")
+            return
+
+        selected_log_name = st.selectbox(
+            "실행 로그 파일 선택",
+            options=[p.name for p in runtime_logs],
+            key="data_logs_runtime_file",
+        )
+        selected_log_path = APP_LOG_DIR / selected_log_name
+        try:
             st.text_area(
                 "로그 내용",
                 value=selected_log_path.read_text(encoding="utf-8", errors="replace"),
                 height=520,
                 disabled=True,
             )
+        except Exception as e:
+            st.error(f"실행 로그 파일을 읽지 못했습니다: {e}")
+        return
+
+    OUTPUT_AGENT_DIR.mkdir(parents=True, exist_ok=True)
+    result_logs = sorted(
+        [p for p in OUTPUT_AGENT_DIR.iterdir() if p.is_file()],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not result_logs:
+        st.info("data/output_agent 폴더에 분석 결과 파일이 없습니다.")
+        return
+
+    selected_log_name = st.selectbox(
+        "분석 결과 파일 선택",
+        options=[p.name for p in result_logs],
+        key="data_logs_result_file",
+    )
+    selected_log_path = OUTPUT_AGENT_DIR / selected_log_name
+    try:
+        if selected_log_path.suffix.lower() == ".json":
+            st.json(json.loads(selected_log_path.read_text(encoding="utf-8")))
+        else:
+            st.text_area(
+                "결과 내용",
+                value=selected_log_path.read_text(encoding="utf-8", errors="replace"),
+                height=520,
+                disabled=True,
+            )
     except Exception as e:
-        st.error(f"로그 파일을 읽지 못했습니다: {e}")
+        st.error(f"분석 결과 파일을 읽지 못했습니다: {e}")
 
 
 # ── 메인 ─────────────────────────────────────────────────

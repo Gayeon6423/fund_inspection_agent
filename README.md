@@ -9,9 +9,9 @@
   - `일치도 분석`: 업로드/시트선택/상태확인/결과조회
   - `프롬프트 수정`: 프롬프트 조회/저장/다운로드
   - `데이터`: 펀드 판매대본 및 상품 설명서 파일 조회
-  - `로그`: 에이전트 로그 조회
+  - `로그`: 서버 실행 로그(`data/log/*.log`) + 분석 결과(JSON) 조회
 - 기본 프롬프트(.env의 `SYSTEM_PROMPT_VERSION`) + 업로드 프롬프트 오버라이드 지원
-- API 서버 단계별 진행 로그(어디서 멈췄는지 추적 가능)
+- API 서버 단계별 진행 로그를 일자별 `.log` 파일(`data/log/YYYY-MM-DD.log`)로 기록
 
 ## 폴더 구조
 ```text
@@ -28,6 +28,7 @@
 │   └── excel_to_json.py        ← xlsx 파싱 및 구조화
 │
 ├── data/                       ← 데이터 저장소
+│   ├── log/                    ← API 서버 실행 로그 (YYYY-MM-DD.log)
 │   ├── uploads_external/       ← 웹 UI에서 업로드된 파일
 │   ├── uploads_local/          ← 로컬에서 입력된 파일
 │   ├── output_excel_json/      ← Excel → JSON 변환 결과물
@@ -40,7 +41,7 @@
 │
 ├── .env / .env_example         ← API 키, 모델 설정
 ├── pyproject.toml / uv.lock    ← 패키지 의존성 (uv 관리)
-└── requirements.txt            ← fastapi, uvicorn, streamlit, python-dotenv
+└── requirements.txt            ← pyproject.toml과 동일한 런타임 의존성 목록
 ```
 ### 데이터 흐름
 ```text
@@ -141,6 +142,7 @@ uvicorn agent.api_server:app --reload --port 8000
 
 ### 진행 로그 확인
 `api_server.py`는 요청마다 `request_id`를 생성해 단계별 로그를 출력합니다.
+로그 파일은 `data/log/YYYY-MM-DD.log` 형식으로 일자별 저장됩니다.
 
 로그 단계 예:
 - 요청 수신
@@ -159,7 +161,7 @@ streamlit run agent/app.py
 ```
 
 UI 기능:
-- 메뉴 선택: `일치도 분석` / `프롬프트 수정` / `데이터 및 로그`
+- 메뉴 선택: `일치도 분석` / `프롬프트 수정` / `데이터` / `로그`
   - `일치도 분석`
     - (기본) `.env`의 `SYSTEM_PROMPT_VERSION` 파일 사용
     - (선택) 사용자 프롬프트 파일 업로드 시 해당 내용으로 분석 오버라이드
@@ -172,12 +174,14 @@ UI 기능:
     - 좌측: `agent/prompt` 파일 선택 후 내용 조회
     - 우측: 파일명/내용 입력 후 저장
     - 우측: 입력한 내용 txt 다운로드
-  - `데이터 및 로그`
+  - `데이터`
     - 좌측: `data/uploads_local` 파일 선택
       - xlsx: 시트 선택 + 표 확인, 파일 다운로드
       - json/csv: 내용 미리보기
       - pdf: 다운로드 + 미리보기
-    - 우측: `data/output_agent` 로그 파일 선택 후 확인
+  - `로그`
+    - `서버 실행 로그(.log)`: `data/log` 일자별 로그 파일 조회
+    - `분석 결과(JSON)`: `data/output_agent` 결과 파일 조회
 - 본문에서
   - 항목별 일치 비교 표
   - 판정 필터(전체/일치/불일치)
