@@ -12,7 +12,19 @@ from zipfile import ZipFile
 NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_REL_OFFICE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_REL_PACKAGE = "http://schemas.openxmlformats.org/package/2006/relationships"
-TARGET_STEP_KEYWORDS = ["설명서 교부", "설명 의무"]
+# TARGET_STEP_KEYWORDS = ["설명서 교부", "설명 의무"]
+TARGET_STEP_KEYWORDS = [
+    "일반 투자자정보 부적합 여부",
+    "부적합상품판매가이드라인",
+    "적합한 상품 투자권유 및 추천이유 설명",
+    "설명서 교부",
+    "설명 의무",
+    "핵심 설명서 필수 사항 설명",
+    "핵심(요약) 설명서 필수 사항 설명",
+    "금소법상 설명서 필수 사항 설명",
+    "(핵심설명서 및) 금소법상 설명서 필수 사항 설명",
+    "2943",
+]
 
 
 def normalize_text(value: str) -> str:
@@ -158,6 +170,7 @@ def build_stage_json(rows, header_row, step_col, example_col):
             continue
 
         current_key = key
+        # 설명서 단계에 키워드 있으면 결과에 포함, 없으면 스킵
         is_target_step = any(keyword in key for keyword in TARGET_STEP_KEYWORDS)
         if not is_target_step:
             continue
