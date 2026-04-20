@@ -13,28 +13,9 @@ NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_REL_OFFICE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_REL_PACKAGE = "http://schemas.openxmlformats.org/package/2006/relationships"
 TARGET_STEP_KEYWORDS = ["설명서 교부", "설명 의무"]
-# TARGET_STEP_KEYWORDS = [
-#     "일반 투자자정보 부적합 여부",
-#     "부적합상품판매가이드라인",
-#     "적합한 상품 투자권유 및 추천이유 설명",
-#     "설명서 교부",
-#     "설명 의무",
-#     "핵심 설명서 필수 사항 설명",
-#     "핵심(요약) 설명서 필수 사항 설명",
-#     "금소법상 설명서 필수 사항 설명",
-#     "(핵심설명서 및) 금소법상 설명서 필수 사항 설명",
-#     "2943",
-# ]
-TARGET_STEP_KEYWORDS = [
-    "설명서 교부",
-    "설명 의무",
-    "핵심 설명서 필수 사항 설명",
-    "핵심(요약) 설명서 필수 사항 설명",
-    "금소법상 설명서 필수 사항 설명",
-    "(핵심설명서 및) 금소법상 설명서 필수 사항 설명",
-    "2943",
-]
-
+TARGET_STEP_KEYWORDS = ["일반 투자자정보 부적합 여부","부적합상품판매가이드라인","적합한 상품 투자권유", "설명서 교부",    
+                        "설명서 및 약관 교부", "설명 의무","핵심 설명서 필수 사항 설명","핵심(요약) 설명서 필수 사항 설명",
+                        "금소법상 설명서 필수 사항 설명","(핵심설명서 및) 금소법상 설명서 필수 사항 설명","2943"]
 
 def normalize_text(value: str) -> str:
     if value is None:
