@@ -4,25 +4,29 @@
 
 ## 핵심 기능
 - Excel 판매대본을 JSON으로 변환 (`excel_json/excel_to_json.py`)
-- Claude API 기반 비교 분석 (`agent/fund_core.py`, `agent/api_server.py`)
+- Claude API 기반 비교 분석 (`inspect_agent/fund_core.py`, `inspect_agent/api_server.py`)
 - Streamlit 웹 UI 메뉴 제공
   - `일치도 분석`: 업로드/시트선택/상태확인/결과조회
   - `프롬프트 수정`: 프롬프트 조회/저장/다운로드
   - `데이터`: 펀드 판매대본 및 상품 설명서 파일 조회
   - `로그`: 서버 실행 로그(`data/log/*.log`) + 분석 결과(JSON) 조회
-- 기본 프롬프트(.env의 `SYSTEM_PROMPT_VERSION`) + 업로드 프롬프트 오버라이드 지원
+- 기본 프롬프트(.env의 `INSPECT_SYSTEM_PROMPT_VERSION`) + 업로드 프롬프트 오버라이드 지원
 - API 서버 단계별 진행 로그를 일자별 `.log` 파일(`data/log/YYYY-MM-DD.log`)로 기록
 
 ## 폴더 구조
 ```text
 .
-├── agent/                      ← 메인 애플리케이션
+├── inspect_agent/              ← 판매대본 점검 에이전트
 │   ├── app.py                  ← Streamlit 웹 UI (사용자 인터페이스)
 │   ├── api_server.py           ← FastAPI REST API 서버
 │   ├── fund_core.py            ← 공유 비즈니스 로직 (LLM 호출, 비교 계산)
 │   ├── api_server_test.py      ← API 서버 테스트
 │   └── prompt/                 ← 시스템 프롬프트 버전 관리
-│       ├── system_prompt_v1.txt ~ v11.txt
+│       ├── inspect_system_prompt_v1.txt ~ vN.txt
+│
+├── generate_agent/              ← 판매대본 생성 에이전트
+│
+│
 │
 ├── excel_json/                 ← Excel → JSON 변환 모듈
 │   └── excel_to_json.py        ← xlsx 파싱 및 구조화
@@ -32,16 +36,11 @@
 │   ├── uploads_external/       ← 웹 UI에서 업로드된 파일
 │   ├── uploads_local/          ← 로컬에서 입력된 파일
 │   ├── output_excel_json/      ← Excel → JSON 변환 결과물
-│   └── output_agent/           ← LLM 분석 결과물 (JSON)
-│
-├── legacy/                     ← 구버전 코드 (참고용 보관)
-│   ├── agent_test.py
-│   ├── api_client_test copy.py
-│   └── api_server copy.py
+│   ├── output_inspect_agent/   ← 판매대본 점검 LLM 분석 결과물 (JSON)
+│   └── output_generate_agent/  ← 판매대본 생성 LLM 분석 결과물 (JSON)
 │
 ├── .env / .env_example         ← API 키, 모델 설정
-├── pyproject.toml / uv.lock    ← 패키지 의존성 (uv 관리)
-└── requirements.txt            ← pyproject.toml과 동일한 런타임 의존성 목록
+└── requirements.txt            ← 런타임 의존성 목록
 ```
 ### 데이터 흐름
 ```text
@@ -50,7 +49,7 @@ Excel 판매대본
     └─→ excel_to_json.py (xlsx 파싱)
             └─→ output_excel_json/ (JSON 저장)
                     └─→ fund_core.py (LLM 호출: Claude)
-                            └─→ output_agent/ (비교 결과 JSON)
+                            └─→ output_inspect_agent/ (비교 결과 JSON)
                                     └─→ app.py (Streamlit 결과 표시)
 
 ```
@@ -74,11 +73,6 @@ Excel 판매대본
 pip install -r requirements.txt
 ```
 
-또는 uv를 사용하는 경우:
-```bash
-uv sync
-```
-
 ## 2) 환경변수 설정
 
 ### 웹 UI (Streamlit) 환경변수
@@ -88,10 +82,10 @@ uv sync
 API_KEY="sk-ant-..."
 LLM_MODEL="claude-sonnet-4-6"
 
-# Agent configuration
-SYSTEM_PROMPT_VERSION="system_prompt_v11"
+# Inspect Agent configuration
+SYSTEM_PROMPT_VERSION="inspect_system_prompt_v11"
 
-# Agent Input
+# Inspect Agent Input
 INPUT_SCRIPT_FILE="판매대본.json"
 INPUT_MANUAL_FILE="상품설명서.pdf"
 ```
@@ -103,10 +97,10 @@ INPUT_MANUAL_FILE="상품설명서.pdf"
 API_KEY="sk-ant-..."
 LLM_MODEL="claude-sonnet-4-6"
 
-# Agent configuration
-SYSTEM_PROMPT_VERSION="system_prompt_v11"
+# Inspect Agent configuration
+SYSTEM_PROMPT_VERSION="inspect_system_prompt_v11"
 
-# Agent Input (로컬 실행 시)
+# Inspect Agent Input (로컬 실행 시)
 INPUT_SCRIPT_FILE="판매대본.json"
 INPUT_MANUAL_FILE="상품설명서.pdf"
 ```
@@ -124,7 +118,7 @@ INPUT_MANUAL_FILE="상품설명서.pdf"
 예시:
 ```bash
 # 사모펀드
-python excel_json/excel_to_json.py "사모_판매대본_라이프META일반사모투자신탁 제2호.xlsx" --sheets "사모펀드(내점)" "사모펀드(방문)"
+python excel_json/excel_to_json.py "../../data/uploads_local/사모_판매대본_라이프META일반사모투자신탁 제2호.xlsx" --sheets "사모펀드(내점)" "사모펀드(방문)"
 
 # 공모펀드
 python excel_json/excel_to_json.py "공모펀드_판매대본_한국투자JPMorgan.xlsx" --sheets "공모펀드(내점)" "공모펀드(유선)" "공모펀드(방문)"
@@ -132,7 +126,7 @@ python excel_json/excel_to_json.py "공모펀드_판매대본_한국투자JPMorg
 
 ## 4) API 서버 실행 (FastAPI)
 ```bash
-uvicorn agent.api_server:app --reload --port 8000
+uvicorn inspect_agent.api_server:app --reload --port 8000
 ```
 
 주요 엔드포인트:
@@ -157,13 +151,13 @@ uvicorn agent.api_server:app --reload --port 8000
 
 ## 5) 웹 UI 실행 (Streamlit)
 ```bash
-streamlit run agent/app.py
+streamlit run inspect_agent/app.py
 ```
 
 UI 기능:
 - 메뉴 선택: `일치도 분석` / `프롬프트 수정` / `데이터` / `로그`
   - `일치도 분석`
-    - (기본) `.env`의 `SYSTEM_PROMPT_VERSION` 파일 사용
+    - (기본) `.env`의 `INSPECT_SYSTEM_PROMPT_VERSION` 파일 사용
     - (선택) 사용자 프롬프트 파일 업로드 시 해당 내용으로 분석 오버라이드
     - 판매대본 Excel 업로드
     - 설명서 PDF 업로드
@@ -171,7 +165,7 @@ UI 기능:
     - 선택 시트 수 확인
     - 변환 상태 / 분석 상태 확인
   - `프롬프트 수정`
-    - 좌측: `agent/prompt` 파일 선택 후 내용 조회
+    - 좌측: `inspect_agent/prompt` 파일 선택 후 내용 조회
     - 우측: 파일명/내용 입력 후 저장
     - 우측: 입력한 내용 txt 다운로드
   - `데이터`
@@ -181,7 +175,7 @@ UI 기능:
       - pdf: 다운로드 + 미리보기
   - `로그`
     - `서버 실행 로그(.log)`: `data/log` 일자별 로그 파일 조회
-    - `분석 결과(JSON)`: `data/output_agent` 결과 파일 조회
+    - `분석 결과(JSON)`: `data/output_inspect_agent` 결과 파일 조회
 - 본문에서
   - 항목별 일치 비교 표
   - 판정 필터(전체/일치/불일치)
@@ -223,7 +217,7 @@ UI 기능:
 
 ## 7) API 테스트 스크립트
 ```bash
-python agent/api_server_test.py
+python inspect_agent/api_server_test.py
 ```
 
 ## 8) 문제 해결
@@ -236,15 +230,15 @@ python agent/api_server_test.py
 
 ### 일반 오류
 - **`ModuleNotFoundError: excel_json`**
-  - 프로젝트 루트에서 `streamlit run agent/app.py` 형태로 실행
+  - 프로젝트 루트에서 `streamlit run inspect_agent/app.py` 형태로 실행
 
 - **Claude API 호출 실패**
   - `.streamlit/secrets.toml` 또는 `.env`의 `API_KEY` 확인
-  - 모델명 확인 (`claude-sonnet-4-6` 권장)
+  - 모델명 확인
   - API 서버 로그의 `request_id` 기준으로 실패 단계 확인
 
 - **LLM 응답 파싱 실패**
-  - 시스템 프롬프트 버전 확인 (`SYSTEM_PROMPT_VERSION` 설정값)
+  - 시스템 프롬프트 버전 확인 설정값
   - 업로드 프롬프트 사용 시 JSON 출력 규칙 포함 여부 확인
 
 - **PDF 미리보기가 보이지 않음**
