@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 import threading
 import time
 from datetime import datetime
@@ -19,6 +20,15 @@ LOCAL_UPLOAD_DIR = PROJECT_ROOT / "data" / "uploads_local"
 EXTERNAL_UPLOAD_DIR = PROJECT_ROOT / "data" / "uploads_external"
 APP_LOG_DIR = PROJECT_ROOT / "data" / "log"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "output_generate_agent"
+
+
+def get_setting(name: str, default: str | None = None):
+    try:
+        if name in st.secrets:
+            return st.secrets[name]
+    except Exception:
+        pass
+    return os.getenv(name, default)
 
 
 def to_csv_bytes(data: dict) -> bytes:
@@ -47,6 +57,10 @@ def to_table_rows(data: dict) -> list[dict]:
 
 def render_generate_page():
     st.markdown("### 판매대본 생성")
+    if not api.API_KEY:
+        st.error("API_KEY가 설정되지 않았습니다. Streamlit Cloud Secrets에 API_KEY를 추가해주세요.")
+        return
+
     uploaded_pdf = st.file_uploader("상품설명서 PDF 업로드", type=["pdf"], key="generate_pdf")
     if uploaded_pdf is not None:
         st.markdown(
@@ -91,7 +105,11 @@ def render_generate_page():
             time.sleep(1)
 
         if result_holder["error"] is not None:
-            raise result_holder["error"]
+            err = result_holder["error"]
+            detail = getattr(err, "detail", str(err))
+            status_box.info("❌ 판매대본 생성 실패")
+            st.error(f"생성 중 오류가 발생했습니다: {detail}")
+            return
 
         answer_text = result_holder["answer_text"]
         try:
@@ -192,6 +210,9 @@ def render_log_page():
 
 def main():
     st.set_page_config(page_title="펀드판매대본 생성 시스템", layout="wide")
+    api.API_KEY = get_setting("API_KEY")
+    api.MODEL = get_setting("LLM_MODEL", api.MODEL)
+    api.SYSTEM_PROMPT_VERSION = get_setting("GENERATE_SYSTEM_PROMPT_VERSION", api.SYSTEM_PROMPT_VERSION)
 
     st.markdown(
     """
