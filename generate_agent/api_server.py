@@ -284,45 +284,54 @@ def generate_script(body: GenerateRequest):
     started_at = time.perf_counter()
     logger.info("[%s] generate 요청 수신 | manual_file_path=%s", request_id, body.manual_file_path)
 
-    manual_path = _resolve_path(body.manual_file_path) # 파일 경로 해석
-    logger.info("[%s] 파일 경로 확인 완료 | resolved_path=%s", request_id, manual_path)
-    manual_pdf_bytes = manual_path.read_bytes() # PDF 파일을 바이너리로 읽기
-    logger.info("[%s] 파일 읽기 완료 | size=%d bytes", request_id, len(manual_pdf_bytes))
-
-    if not manual_pdf_bytes.startswith(b"%PDF-"):
-        # 실제 PDF 파일인지 간단히 체크. PDF 파일이 아니면 예외를 발생시킵니다.
-        logger.warning("[%s] PDF 시그니처 검증 실패", request_id)
-        raise HTTPException(status_code=400, detail="manual_file_path는 PDF 파일이어야 합니다.")
-
-    # PDF와 상품명을 LLM API에 보내서 판매대본 생성
-    logger.info("[%s] LLM 호출 시작", request_id)
-    answer_text = _call_llm_generate(
-        manual_pdf_bytes=manual_pdf_bytes,
-        manual_file_name=body.manual_file_name,
-    )
-    logger.info("[%s] LLM 호출 완료", request_id)
-
     try:
-        generated = _parse_json_from_text(answer_text)
-        logger.info("[%s] LLM 응답 JSON 파싱 성공", request_id)
-    except Exception:
-        logger.warning("[%s] LLM 응답 JSON 파싱 실패, 원문 저장", request_id)
-        generated = {
-            "raw_text": answer_text,
-            "warning": "LLM 응답을 JSON으로 파싱하지 못해 원문을 저장했습니다.",
+        manual_path = _resolve_path(body.manual_file_path) # 파일 경로 해석
+        logger.info("[%s] 파일 경로 확인 완료 | resolved_path=%s", request_id, manual_path)
+        manual_pdf_bytes = manual_path.read_bytes() # PDF 파일을 바이너리로 읽기
+        logger.info("[%s] 파일 읽기 완료 | size=%d bytes", request_id, len(manual_pdf_bytes))
+
+        if not manual_pdf_bytes.startswith(b"%PDF-"):
+            # 실제 PDF 파일인지 간단히 체크. PDF 파일이 아니면 예외를 발생시킵니다.
+            logger.warning("[%s] PDF 시그니처 검증 실패", request_id)
+            raise HTTPException(status_code=400, detail="manual_file_path는 PDF 파일이어야 합니다.")
+
+        # PDF와 상품명을 LLM API에 보내서 판매대본 생성
+        logger.info("[%s] LLM 호출 시작", request_id)
+        answer_text = _call_llm_generate(
+            manual_pdf_bytes=manual_pdf_bytes,
+            manual_file_name=body.manual_file_name,
+        )
+        logger.info("[%s] LLM 호출 완료", request_id)
+
+        try:
+            generated = _parse_json_from_text(answer_text)
+            logger.info("[%s] LLM 응답 JSON 파싱 성공", request_id)
+        except Exception:
+            logger.warning("[%s] LLM 응답 JSON 파싱 실패, 원문 저장", request_id)
+            generated = {
+                "raw_text": answer_text,
+                "warning": "LLM 응답을 JSON으로 파싱하지 못해 원문을 저장했습니다.",
+            }
+
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        script_name = body.manual_file_name.strip() if body.manual_file_name and body.manual_file_name.strip() else manual_path.stem
+        out_name = f"{ts}_{_safe_tag(script_name)}_{_safe_tag(SYSTEM_PROMPT_VERSION)}.json"
+        output_path = OUTPUT_DIR / out_name
+        output_path.write_text(json.dumps(generated, ensure_ascii=False, indent=2), encoding="utf-8")
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        logger.info("[%s] generate 결과 저장 완료 | path=%s | elapsed=%dms", request_id, output_path, elapsed_ms)
+
+        return {
+            "saved_path": str(output_path),
+            "prompt_version": SYSTEM_PROMPT_VERSION,
+            "result": generated,
         }
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    script_name = body.manual_file_name.strip() if body.manual_file_name and body.manual_file_name.strip() else manual_path.stem
-    out_name = f"{ts}_{_safe_tag(script_name)}_{_safe_tag(SYSTEM_PROMPT_VERSION)}.json"
-    output_path = OUTPUT_DIR / out_name
-    output_path.write_text(json.dumps(generated, ensure_ascii=False, indent=2), encoding="utf-8")
-    elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-    logger.info("[%s] generate 결과 저장 완료 | path=%s | elapsed=%dms", request_id, output_path, elapsed_ms)
-
-    return {
-        "saved_path": str(output_path),
-        "prompt_version": SYSTEM_PROMPT_VERSION,
-        "result": generated,
-    }
+    except HTTPException as e:
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        logger.warning("[%s] 요청 처리 실패(HTTP) | status=%s | detail=%s | elapsed=%dms", request_id, e.status_code, e.detail, elapsed_ms)
+        raise
+    except Exception as e:
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        logger.exception("[%s] 요청 처리 실패(Exception) | elapsed=%dms", request_id, elapsed_ms)
+        raise HTTPException(status_code=500, detail=f"서버 오류: {type(e).__name__}: {e}")

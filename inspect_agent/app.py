@@ -60,10 +60,20 @@ def safe_name(value: str) -> str:
 
 def append_inspect_log(message: str):
     APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = APP_LOG_DIR / f"inspect_{datetime.now().strftime('%Y-%m-%d')}.log"
+    day = datetime.now().strftime("%Y-%m-%d")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with log_path.open("a", encoding="utf-8") as f:
-        f.write(f"{timestamp} | INFO | {message}\n")
+    line = f"{timestamp} | INFO | {message}\n"
+    targets = [
+        APP_LOG_DIR / f"inspect_{day}.log",
+        APP_LOG_DIR / f"{day}.log",  # 기존 날짜 로그 파일도 함께 유지 (호환용)
+    ]
+    for log_path in targets:
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(line)
+        except Exception:
+            # 로그 기록 실패가 본 분석 플로우를 깨지 않도록 보호
+            pass
 
 
 def parse_sheet_names_from_xlsx_bytes(raw: bytes):
@@ -82,8 +92,12 @@ def parse_sheet_names_from_xlsx_bytes(raw: bytes):
 
 
 def get_setting(name: str, default: str | None = None):
-    if name in st.secrets:
-        return st.secrets[name]
+    try:
+        if name in st.secrets:
+            return st.secrets[name]
+    except Exception:
+        # secrets.toml이 없어도 .env/os.environ fallback 동작을 유지
+        pass
     return os.getenv(name, default)
 
 

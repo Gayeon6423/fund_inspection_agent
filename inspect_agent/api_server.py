@@ -73,6 +73,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("fund-agent")
 logger.setLevel(logging.INFO)
+logger.propagate = False
 if not any(isinstance(handler, DailyFileHandler) for handler in logger.handlers):
     daily_file_handler = DailyFileHandler(LOG_DIR, prefix="inspect")
     daily_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
@@ -82,14 +83,31 @@ if not any(isinstance(handler, DailyFileHandler) for handler in logger.handlers)
 
 # ── 환경변수 ──────────────────────────────────────────────
 API_KEY = os.getenv("API_KEY")
-SYSTEM_PROMPT_VERSION = os.getenv("SYSTEM_PROMPT_VERSION", "system_prompt_v5")
+SYSTEM_PROMPT_VERSION = os.getenv("INSPECT_SYSTEM_PROMPT_VERSION") or os.getenv("SYSTEM_PROMPT_VERSION", "inspect_system_prompt_v11")
 if not API_KEY:
     print("에러: API_KEY 환경변수를 먼저 설정해주세요.")
     sys.exit(1)
 
 MODEL = os.getenv("LLM_MODEL")
 
-_prompt_path = Path(__file__).resolve().parent / "prompt" / f"{SYSTEM_PROMPT_VERSION}.txt"
+_prompt_dir = Path(__file__).resolve().parent / "prompt"
+_prompt_path = _prompt_dir / f"{SYSTEM_PROMPT_VERSION}.txt"
+if not _prompt_path.exists():
+    _fallback_candidates = [
+        _prompt_dir / "inspect_system_prompt_v11.txt",
+        _prompt_dir / "system_prompt_v11.txt",
+        _prompt_dir / "system_prompt_v5.txt",
+    ]
+    for _candidate in _fallback_candidates:
+        if _candidate.exists():
+            _prompt_path = _candidate
+            SYSTEM_PROMPT_VERSION = _candidate.stem
+            break
+    else:
+        raise FileNotFoundError(
+            f"프롬프트 파일을 찾을 수 없습니다. 요청: {_prompt_dir / f'{SYSTEM_PROMPT_VERSION}.txt'}"
+        )
+
 with open(_prompt_path, encoding="utf-8") as _f:
     SYSTEM_PROMPT = _f.read().strip()
 
@@ -102,6 +120,11 @@ app = FastAPI(
     version="1.0.0",
     description="LLM 기반 펀드 AI 에이전트 API",
 )
+
+
+@app.on_event("startup")
+def on_startup():
+    logger.info("inspect API 서버 시작 | model=%s | prompt_version=%s", MODEL, SYSTEM_PROMPT_VERSION)
 
 # ── 요청 스키마 ───────────────────────────────────────────
 class AskRequest(BaseModel):
@@ -239,4 +262,5 @@ def ask(body: AskRequest):
 # ── 헬스체크 ─────────────────────────────────────────────
 @app.get("/health")
 def health():
+    logger.info("health 체크 요청 수신")
     return {"status": "ok", "model": MODEL}
