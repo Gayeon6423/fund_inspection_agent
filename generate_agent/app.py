@@ -128,8 +128,8 @@ def render_generate_page():
         base_name = api._safe_tag(base_name_raw)
         prompt_version = api._safe_tag(api.SYSTEM_PROMPT_VERSION)
 
-        json_name = f"{ts}_생성결과_{base_name}.json"
-        csv_name = f"{ts}_생성결과_{base_name}.csv"
+        json_name = f"생성결과_{ts}_{base_name}.json"
+        csv_name = f"생성결과_{ts}_{base_name}.csv"
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         json_path = OUTPUT_DIR / json_name
