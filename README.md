@@ -80,7 +80,7 @@ pip install -r requirements.txt
 
 ```toml
 API_KEY="sk-ant-..."
-LLM_MODEL="claude-sonnet-4-6"
+LLM_MODEL="claude-haiku-4-5-20251001"
 
 # Inspect Agent configuration
 SYSTEM_PROMPT_VERSION="inspect_system_prompt_v11"
@@ -95,7 +95,7 @@ INPUT_MANUAL_FILE="상품설명서.pdf"
 
 ```env
 API_KEY="sk-ant-..."
-LLM_MODEL="claude-sonnet-4-6"
+LLM_MODEL="claude-haiku-4-5-20251001"
 
 # Inspect Agent configuration
 SYSTEM_PROMPT_VERSION="inspect_system_prompt_v11"
@@ -118,10 +118,10 @@ INPUT_MANUAL_FILE="상품설명서.pdf"
 예시:
 ```bash
 # 사모펀드
-python excel_json/excel_to_json.py "../../data/uploads_local/사모_판매대본_라이프META일반사모투자신탁 제2호.xlsx" --sheets "사모펀드(내점)" "사모펀드(방문)"
+python inspect_agent/excel_json/excel_to_json.py "../../data/uploads_local/사모_판매대본_라이프META일반사모투자신탁 제2호.xlsx" --sheets "사모펀드(내점)"
 
 # 공모펀드
-python excel_json/excel_to_json.py "공모펀드_판매대본_한국투자JPMorgan.xlsx" --sheets "공모펀드(내점)" "공모펀드(유선)" "공모펀드(방문)"
+python inspect_agent/excel_json/excel_to_json.py "../../data/uploads_local/공모_판매대본_한국투자JPMorgan글로벌하이일드제안서.xlsx" --sheets "공모펀드(내점)"
 ```
 
 ## 4) API 서버 실행 (FastAPI)

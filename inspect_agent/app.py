@@ -58,6 +58,14 @@ def safe_name(value: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "_", value).strip()
 
 
+def append_inspect_log(message: str):
+    APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_path = APP_LOG_DIR / f"inspect_{datetime.now().strftime('%Y-%m-%d')}.log"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(f"{timestamp} | INFO | {message}\n")
+
+
 def parse_sheet_names_from_xlsx_bytes(raw: bytes):
     with ZipFile(BytesIO(raw)) as zf:
         wb_root = ET.fromstring(zf.read("xl/workbook.xml"))
@@ -358,14 +366,19 @@ def render_log_page():
     st.markdown("### 로그 조회")
     log_type = st.radio(
         "로그 종류",
-        options=["서버 실행 로그(.log)", "분석 결과(JSON)"],
+        options=["서버 실행 로그", "분석 결과"],
         horizontal=True,
         key="data_logs_type",
     )
 
-    if log_type == "서버 실행 로그(.log)":
+    if log_type == "서버 실행 로그":
         APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        runtime_logs = sorted(
+        inspect_logs = sorted(
+            [p for p in APP_LOG_DIR.glob("inspect_*.log") if p.is_file()],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        runtime_logs = inspect_logs or sorted(
             [p for p in APP_LOG_DIR.glob("*.log") if p.is_file()],
             key=lambda p: p.stat().st_mtime,
             reverse=True,
@@ -448,7 +461,7 @@ def main():
         .app-header .subtitle { font-size:16px; font-weight:600; color:var(--text-color); opacity:0.8; margin-top:6px; }
         </style>
         <div class="app-header">
-          <div class="title">📄 펀드판매대본 점검 시스템</div>
+          <div class="title">🚨 펀드판매대본 점검 시스템</div>
           <div class="subtitle">펀드 판매대본과 상품 설명서의 일치도를 분석합니다.</div>
         </div>
         """,
@@ -643,14 +656,18 @@ def main():
 
     run = st.sidebar.button("일치도 분석 실행", type="primary", use_container_width=True)
     if run:
+        append_inspect_log("일치도 분석 실행 시작")
         if not api_key:
             st.error("API_KEY가 설정되지 않았습니다.")
+            append_inspect_log("일치도 분석 중단 | 사유=API_KEY 미설정")
             st.stop()
         if script_excel is None or manual_pdf is None:
             st.error("판매대본 파일과 설명서 파일을 모두 업로드해주세요.")
+            append_inspect_log("일치도 분석 중단 | 사유=입력 파일 누락")
             st.stop()
         if not selected_sheets:
             st.error("분석할 시트를 1개 이상 선택해주세요.")
+            append_inspect_log("일치도 분석 중단 | 사유=시트 미선택")
             st.stop()
 
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -674,6 +691,7 @@ def main():
         render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
 
         for sheet in selected_sheets:
+            append_inspect_log(f"시트 분석 시작 | sheet={sheet}")
             sheet_start  = time.time()
             timer_ph     = st.empty()
             current_step = ["변환 중"]
@@ -745,6 +763,7 @@ def main():
 
                 output_path = OUTPUT_INSPECT_AGENT_DIR / f"web_{ts}_{safe_name(sheet)}_{active_prompt_tag}.json"
                 output_path.write_text(json.dumps(result_json, ensure_ascii=False, indent=2), encoding="utf-8")
+                append_inspect_log(f"시트 분석 결과 저장 완료 | sheet={sheet} | output={output_path}")
 
                 analysis_results.append({
                     "sheet": sheet,
@@ -758,6 +777,7 @@ def main():
                 elapsed_total = int(time.time() - sheet_start)
                 analyze_status_map[sheet] = f"분석 완료 ({elapsed_total}초)"
                 timer_ph.success(f"✅ [{sheet}] 완료! (총 {elapsed_total}초 소요)")
+                append_inspect_log(f"시트 분석 완료 | sheet={sheet} | elapsed={elapsed_total}s")
 
             except Exception as e:
                 done_event.set()
@@ -765,6 +785,7 @@ def main():
                 elapsed = int(time.time() - sheet_start)
                 st.error(f"[{sheet}] 처리 중 오류: {e}")
                 timer_ph.error(f"❌ [{sheet}] 오류 ({elapsed}초 후)")
+                append_inspect_log(f"시트 분석 오류 | sheet={sheet} | elapsed={elapsed}s | error={e}")
                 if convert_status_map.get(sheet) == "변환 중":
                     convert_status_map[sheet] = "변환 오류"
                 else:
@@ -775,6 +796,7 @@ def main():
                 render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
 
         st.session_state["analysis_results"] = analysis_results
+        append_inspect_log(f"일치도 분석 실행 종료 | 성공 시트 수={len(analysis_results)}")
         if analysis_results:
             st.session_state["selected_sheet"] = analysis_results[0]["sheet"]
 
@@ -823,6 +845,7 @@ def main():
         summary_manual=result_json.get("summary_manual"),
     )
     filter_col, btn_col = st.columns([3, 1])
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     with filter_col:
         verdict_filter = st.radio(" ", options=["전체", "일치", "불일치"], horizontal=True, key="verdict_filter")
     with btn_col:
@@ -831,7 +854,7 @@ def main():
             st.download_button(
                 label="📥 CSV 다운로드",
                 data=rows_to_csv(rows),
-                file_name=f"비교결과_{safe_name(selected['sheet'])}.csv",
+                file_name=f"비교결과_{ts}_{safe_name(selected['sheet'])}.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
