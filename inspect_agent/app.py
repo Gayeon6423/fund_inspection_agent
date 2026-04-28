@@ -456,12 +456,30 @@ def main():
 
     api_key            = get_setting("API_KEY")
     model              = get_setting("LLM_MODEL")
-    INSPECT_SYSTEM_PROMPT_VERSION = get_setting("INSPECT_SYSTEM_PROMPT_VERSION", "system_prompt_v11")
+    INSPECT_SYSTEM_PROMPT_VERSION = (
+        get_setting("INSPECT_SYSTEM_PROMPT_VERSION")
+        or get_setting("SYSTEM_PROMPT_VERSION")
+        or "inspect_system_prompt_v11"
+    )
 
     prompt_path = PROMPT_DIR / f"{INSPECT_SYSTEM_PROMPT_VERSION}.txt"
     if not prompt_path.exists():
-        st.error(f"프롬프트 파일이 없습니다: {prompt_path}\nINSPECT_SYSTEM_PROMPT_VERSION 값을 확인해주세요.")
-        st.stop()
+        fallback_candidates = [
+            PROMPT_DIR / "inspect_system_prompt_v11.txt",
+            PROMPT_DIR / "system_prompt_v11.txt",
+            PROMPT_DIR / "system_prompt_v5.txt",
+        ]
+        for candidate in fallback_candidates:
+            if candidate.exists():
+                prompt_path = candidate
+                INSPECT_SYSTEM_PROMPT_VERSION = candidate.stem
+                break
+        else:
+            st.error(
+                f"프롬프트 파일이 없습니다: {prompt_path}\n"
+                "INSPECT_SYSTEM_PROMPT_VERSION 또는 SYSTEM_PROMPT_VERSION 값을 확인해주세요."
+            )
+            st.stop()
     default_system_prompt = prompt_path.read_text(encoding="utf-8").strip()
     active_system_prompt = default_system_prompt
     active_prompt_tag = INSPECT_SYSTEM_PROMPT_VERSION
