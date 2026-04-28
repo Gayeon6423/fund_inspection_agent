@@ -717,6 +717,7 @@ def main():
         pdf_upload_path.write_bytes(manual_pdf_bytes)
 
         analysis_results = []
+        source_file_name = Path(script_excel.name).stem
         convert_status_map = {s: "대기" for s in selected_sheets}
         analyze_status_map = {s: "대기" for s in selected_sheets}
         st.session_state["convert_status"] = convert_status_map
@@ -800,6 +801,7 @@ def main():
 
                 analysis_results.append({
                     "sheet": sheet,
+                    "source_file_name": source_file_name,
                     "script_json": script_json,
                     "match_rate": match_rate,
                     "result_json": result_json,
@@ -884,10 +886,11 @@ def main():
     with btn_col:
         if rows:
             st.markdown("<div style='height:22px;'></div>", unsafe_allow_html=True)
+            source_file_name = safe_name(selected.get("source_file_name") or "원본파일")
             st.download_button(
                 label="📥 CSV 다운로드",
                 data=rows_to_csv(rows),
-                file_name=f"비교결과_{ts}_{safe_name(selected['sheet'])}.csv",
+                file_name=f"비교결과_{ts}_{source_file_name}_{safe_name(selected['sheet'])}.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
