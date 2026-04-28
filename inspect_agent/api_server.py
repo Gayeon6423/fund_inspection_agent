@@ -79,7 +79,7 @@ if not any(isinstance(handler, DailyFileHandler) for handler in logger.handlers)
     daily_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
     logger.addHandler(daily_file_handler)
 # 서버 기동 직후에도 오늘 날짜 로그 파일이 존재하도록 보장
-(LOG_DIR / f"inspect_{datetime.now().strftime('%Y-%m-%d')}.log").touch(exist_ok=True)
+(LOG_DIR / f"inspect_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log").touch(exist_ok=True)
 
 # ── 환경변수 ──────────────────────────────────────────────
 API_KEY = os.getenv("API_KEY")

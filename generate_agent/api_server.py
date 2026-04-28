@@ -75,7 +75,7 @@ if not any(isinstance(handler, DailyFileHandler) for handler in logger.handlers)
     daily_file_handler = DailyFileHandler(LOG_DIR, prefix="generate")
     daily_file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
     logger.addHandler(daily_file_handler)
-(LOG_DIR / f"generate_{datetime.now().strftime('%Y-%m-%d')}.log").touch(exist_ok=True)
+(LOG_DIR / f"generate_{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.log").touch(exist_ok=True)
 
 
 class GenerateRequest(BaseModel):
