@@ -205,7 +205,7 @@ def status_icon(status: str) -> str:
 def render_status_panel(container, sheets, convert_status_map, analyze_status_map):
     with container.container():
         if not sheets:
-            st.caption("시트를 선택하면 상태가 표시됩니다.")
+            # st.caption("시트를 선택하면 상태가 표시됩니다.")
             return
         st.markdown("### 변환 상태")
         for sheet in sheets:
@@ -641,25 +641,6 @@ def main():
         "### 파일 업로드 (<span style='color:#ff4b4b;'>복호화</span> 파일만 가능)",
         unsafe_allow_html=True,
     )
-    uploaded_prompt_file = st.sidebar.file_uploader(
-        "• 사용자 프롬프트 파일 업로드 (.txt/.md)",
-        type=["txt", "md"],
-        key="uploaded_prompt_file",
-    )
-    if uploaded_prompt_file is not None:
-        try:
-            uploaded_prompt_text = uploaded_prompt_file.getvalue().decode("utf-8").strip()
-        except UnicodeDecodeError:
-            st.error("업로드한 프롬프트 파일은 UTF-8 인코딩이어야 합니다.")
-            st.stop()
-        if not uploaded_prompt_text:
-            st.error("업로드한 프롬프트 파일 내용이 비어 있습니다.")
-            st.stop()
-        active_system_prompt = uploaded_prompt_text
-        active_prompt_tag = f"upload_{safe_name(Path(uploaded_prompt_file.name).stem)}"
-        st.sidebar.caption(f"현재 프롬프트: 업로드 파일 ({uploaded_prompt_file.name})")
-    else:
-        st.sidebar.caption(f"현재 프롬프트: 기본 ({INSPECT_SYSTEM_PROMPT_VERSION}.txt)")
 
     script_excel = st.sidebar.file_uploader("• 판매대본 파일 업로드 (.xlsx)", type=["xlsx"])
     manual_pdf = st.sidebar.file_uploader("• 설명서 파일 업로드 (.pdf)", type=["pdf"])
@@ -680,6 +661,26 @@ def main():
         except Exception as e:
             st.error(f"시트 목록을 읽지 못했습니다: {e}")
             st.stop()
+
+    uploaded_prompt_file = st.sidebar.file_uploader(
+        "• 사용자 프롬프트 파일 업로드 (.txt/.md)(선택)",
+        type=["txt", "md"],
+        key="uploaded_prompt_file",
+    )
+    if uploaded_prompt_file is not None:
+        try:
+            uploaded_prompt_text = uploaded_prompt_file.getvalue().decode("utf-8").strip()
+        except UnicodeDecodeError:
+            st.error("업로드한 프롬프트 파일은 UTF-8 인코딩이어야 합니다.")
+            st.stop()
+        if not uploaded_prompt_text:
+            st.error("업로드한 프롬프트 파일 내용이 비어 있습니다.")
+            st.stop()
+        active_system_prompt = uploaded_prompt_text
+        active_prompt_tag = f"upload_{safe_name(Path(uploaded_prompt_file.name).stem)}"
+        st.sidebar.caption(f"현재 프롬프트: 업로드 파일 ({uploaded_prompt_file.name})")
+    else:
+        st.sidebar.caption(f"현재 프롬프트: 기본 ({INSPECT_SYSTEM_PROMPT_VERSION}.txt)")
 
     convert_status_map = st.session_state.get("convert_status", {})
     analyze_status_map = st.session_state.get("analyze_status", {})
