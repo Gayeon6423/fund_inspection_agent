@@ -22,6 +22,25 @@ APP_LOG_DIR = PROJECT_ROOT / "data" / "log"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "output_generate_agent"
 
 
+def _runtime_prefix() -> str:
+    """Streamlit Cloud면 web, 그 외는 local."""
+    cloud_markers = (
+        os.getenv("STREAMLIT_SHARING_MODE"),
+        os.getenv("STREAMLIT_CLOUD"),
+        os.getenv("IS_STREAMLIT_CLOUD"),
+    )
+    return "web" if any(cloud_markers) else "local"
+
+
+def _prompt_version_tag(version: str) -> str:
+    """예: generate_system_prompt_v2 -> prompt_v2"""
+    stem = Path(version).stem
+    parts = stem.split("_")
+    if parts and parts[-1].startswith("v") and parts[-1][1:].isdigit():
+        return f"prompt_{parts[-1]}"
+    return f"prompt_{api._safe_tag(stem)}"
+
+
 def start_generate_log_run() -> Path:
     APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
     run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -163,8 +182,11 @@ def render_generate_page():
         status_box.info(f"✅ 판매대본 분석 완료! (총 {total_elapsed}초 소요)")
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        json_name = f"generate_{ts}.json"
-        csv_name = f"generate_{ts}.csv"
+        runtime_prefix = _runtime_prefix()
+        base_name = api._safe_tag(Path(uploaded_pdf.name).stem)
+        prompt_tag = _prompt_version_tag(api.SYSTEM_PROMPT_VERSION)
+        json_name = f"{runtime_prefix}_{ts}_생성결과_{base_name}_{prompt_tag}.json"
+        csv_name = f"{runtime_prefix}_{ts}_생성결과_{base_name}_{prompt_tag}.csv"
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         json_path = OUTPUT_DIR / json_name
@@ -179,7 +201,7 @@ def render_generate_page():
         append_generate_log(f"판매대본 생성 실행 종료 | file={uploaded_pdf.name} | elapsed={total_elapsed}s", log_path=log_path)
 
         st.markdown("#### 생성 결과 테이블")
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width="stretch", hide_index=True)
 
         col1, col2 = st.columns(2)
         with col1:
@@ -238,7 +260,7 @@ def render_log_page():
     try:
         payload = json.loads(selected_path.read_text(encoding="utf-8"))
         st.markdown("#### 결과 테이블")
-        st.dataframe(to_table_rows(payload), use_container_width=True, hide_index=True)
+        st.dataframe(to_table_rows(payload), width="stretch", hide_index=True)
         with st.expander("원본 JSON 보기"):
             st.json(payload)
     except Exception as e:

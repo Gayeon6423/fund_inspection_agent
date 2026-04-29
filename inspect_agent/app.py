@@ -473,24 +473,24 @@ def main():
         or "inspect_system_prompt_v11"
     )
 
-    prompt_path = PROMPT_DIR / f"{INSPECT_SYSTEM_PROMPT_VERSION}.txt"
-    if not prompt_path.exists():
-        fallback_candidates = [
-            PROMPT_DIR / "inspect_system_prompt_v11.txt",
-            PROMPT_DIR / "system_prompt_v11.txt",
-            PROMPT_DIR / "system_prompt_v5.txt",
-        ]
-        for candidate in fallback_candidates:
-            if candidate.exists():
-                prompt_path = candidate
-                INSPECT_SYSTEM_PROMPT_VERSION = candidate.stem
-                break
-        else:
-            st.error(
-                f"프롬프트 파일이 없습니다: {prompt_path}\n"
-                "INSPECT_SYSTEM_PROMPT_VERSION 또는 SYSTEM_PROMPT_VERSION 값을 확인해주세요."
-            )
-            st.stop()
+    prompt_candidates = [
+        PROMPT_DIR / f"{INSPECT_SYSTEM_PROMPT_VERSION}.md",
+        PROMPT_DIR / f"{INSPECT_SYSTEM_PROMPT_VERSION}.txt",
+        PROMPT_DIR / "inspect_system_prompt_v11.md",
+        PROMPT_DIR / "inspect_system_prompt_v11.txt",
+        PROMPT_DIR / "system_prompt_v11.md",
+        PROMPT_DIR / "system_prompt_v11.txt",
+        PROMPT_DIR / "system_prompt_v5.md",
+        PROMPT_DIR / "system_prompt_v5.txt",
+    ]
+    prompt_path = next((p for p in prompt_candidates if p.exists()), None)
+    if prompt_path is None:
+        st.error(
+            "프롬프트 파일이 없습니다.\n"
+            "INSPECT_SYSTEM_PROMPT_VERSION 또는 SYSTEM_PROMPT_VERSION 값을 확인해주세요."
+        )
+        st.stop()
+    INSPECT_SYSTEM_PROMPT_VERSION = prompt_path.stem
     default_system_prompt = prompt_path.read_text(encoding="utf-8").strip()
     active_system_prompt = default_system_prompt
     active_prompt_tag = INSPECT_SYSTEM_PROMPT_VERSION
@@ -573,12 +573,18 @@ def main():
             if not prompt_files:
                 st.warning("inspect_agent/prompt 폴더에 조회 가능한 프롬프트 파일이 없습니다.")
             else:
-                default_name = f"{INSPECT_SYSTEM_PROMPT_VERSION}.txt"
+                default_name = f"{INSPECT_SYSTEM_PROMPT_VERSION}.md"
                 default_idx = 0
                 for i, p in enumerate(prompt_files):
                     if p.name == default_name:
                         default_idx = i
                         break
+                if default_idx == 0:
+                    txt_default_name = f"{INSPECT_SYSTEM_PROMPT_VERSION}.txt"
+                    for i, p in enumerate(prompt_files):
+                        if p.name == txt_default_name:
+                            default_idx = i
+                            break
                 selected_prompt_name = st.selectbox(
                     "파일 선택",
                     options=[p.name for p in prompt_files],
@@ -603,7 +609,7 @@ def main():
             save_filename = st.text_input(
                 "파일명",
                 value="",
-                placeholder="예: system_prompt_v12.txt",
+                placeholder="예: system_prompt_v12.md",
                 key="prompt_save_filename",
             )
             save_content = st.text_area(
@@ -616,11 +622,11 @@ def main():
             if download_filename_input:
                 download_filename = safe_name(download_filename_input)
                 if "." not in download_filename:
-                    download_filename = f"{download_filename}.txt"
+                    download_filename = f"{download_filename}.md"
             else:
-                download_filename = "prompt.txt"
+                download_filename = "prompt.md"
             st.download_button(
-                "txt 다운로드",
+                "md 다운로드",
                 data=save_content.encode("utf-8"),
                 file_name=download_filename,
                 mime="text/plain",
@@ -638,7 +644,7 @@ def main():
                 else:
                     safe_filename = safe_name(filename_input)
                     if "." not in safe_filename:
-                        safe_filename = f"{safe_filename}.txt"
+                        safe_filename = f"{safe_filename}.md"
                     if Path(safe_filename).suffix.lower() not in {".txt", ".md"}:
                         st.error("프롬프트 파일 확장자는 .txt 또는 .md만 가능합니다.")
                     else:
@@ -674,8 +680,8 @@ def main():
             st.stop()
 
     uploaded_prompt_file = st.sidebar.file_uploader(
-        "• 사용자 프롬프트 파일 업로드 (.txt/.md)(선택)",
-        type=["txt", "md"],
+        "• 사용자 프롬프트 파일 업로드 (.md)(선택)",
+        type=["md"],
         key="uploaded_prompt_file",
     )
     if uploaded_prompt_file is not None:
@@ -691,7 +697,7 @@ def main():
         active_prompt_tag = f"upload_{safe_name(Path(uploaded_prompt_file.name).stem)}"
         st.sidebar.caption(f"현재 프롬프트: 업로드 파일 ({uploaded_prompt_file.name})")
     else:
-        st.sidebar.caption(f"현재 프롬프트: 기본 ({INSPECT_SYSTEM_PROMPT_VERSION}.txt)")
+        st.sidebar.caption(f"현재 프롬프트: 기본 ({prompt_path.name})")
 
     convert_status_map = st.session_state.get("convert_status", {})
     analyze_status_map = st.session_state.get("analyze_status", {})

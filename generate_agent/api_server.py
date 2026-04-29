@@ -28,7 +28,7 @@ load_dotenv(find_dotenv(), override=True)
 
 API_KEY = os.getenv("API_KEY")
 MODEL = os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001")
-SYSTEM_PROMPT_VERSION = os.getenv("GENERATE_SYSTEM_PROMPT_VERSION", "generate_system_prompt_v1")
+SYSTEM_PROMPT_VERSION = os.getenv("GENERATE_SYSTEM_PROMPT_VERSION", "generate_system_prompt_v2")
 
 
 class DailyFileHandler(logging.Handler):
@@ -92,18 +92,19 @@ def _safe_tag(text: str) -> str:
 
 def _resolve_prompt_path() -> Path:
     """
-    SYSTEM_PROMPT_VERSION에 해당하는 프롬프트 파일 경로를 반환합니다. 없으면 fallback으로 generate_system_prompt_v1.txt를 시도합니다.
+    SYSTEM_PROMPT_VERSION에 해당하는 프롬프트 파일 경로를 반환합니다. .md를 우선하고 .txt를 fallback으로 시도합니다.
     """
-    prompt_path = PROMPT_DIR / f"{SYSTEM_PROMPT_VERSION}.txt"
-    if prompt_path.exists():
-        return prompt_path
-
-    fallback = PROMPT_DIR / "generate_system_prompt_v1.txt"
-    if fallback.exists():
-        return fallback
-
+    candidates = [
+        PROMPT_DIR / f"{SYSTEM_PROMPT_VERSION}.md",
+        PROMPT_DIR / f"{SYSTEM_PROMPT_VERSION}.txt",
+        PROMPT_DIR / "generate_system_prompt_v1.md",
+        PROMPT_DIR / "generate_system_prompt_v1.txt",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
     raise FileNotFoundError(
-        f"프롬프트 파일을 찾을 수 없습니다: {prompt_path} (fallback: {fallback})"
+        f"프롬프트 파일을 찾을 수 없습니다. 확인 대상: {', '.join(str(p) for p in candidates)}"
     )
 
 

@@ -91,22 +91,25 @@ if not API_KEY:
 MODEL = os.getenv("LLM_MODEL")
 
 _prompt_dir = Path(__file__).resolve().parent / "prompt"
-_prompt_path = _prompt_dir / f"{SYSTEM_PROMPT_VERSION}.txt"
-if not _prompt_path.exists():
-    _fallback_candidates = [
-        _prompt_dir / "inspect_system_prompt_v11.txt",
-        _prompt_dir / "system_prompt_v11.txt",
-        _prompt_dir / "system_prompt_v5.txt",
-    ]
-    for _candidate in _fallback_candidates:
-        if _candidate.exists():
-            _prompt_path = _candidate
-            SYSTEM_PROMPT_VERSION = _candidate.stem
-            break
-    else:
-        raise FileNotFoundError(
-            f"프롬프트 파일을 찾을 수 없습니다. 요청: {_prompt_dir / f'{SYSTEM_PROMPT_VERSION}.txt'}"
-        )
+_prompt_candidates = [
+    _prompt_dir / f"{SYSTEM_PROMPT_VERSION}.md",
+    _prompt_dir / f"{SYSTEM_PROMPT_VERSION}.txt",
+    _prompt_dir / "inspect_system_prompt_v11.md",
+    _prompt_dir / "inspect_system_prompt_v11.txt",
+    _prompt_dir / "system_prompt_v11.md",
+    _prompt_dir / "system_prompt_v11.txt",
+    _prompt_dir / "system_prompt_v5.md",
+    _prompt_dir / "system_prompt_v5.txt",
+]
+for _candidate in _prompt_candidates:
+    if _candidate.exists():
+        _prompt_path = _candidate
+        SYSTEM_PROMPT_VERSION = _candidate.stem
+        break
+else:
+    raise FileNotFoundError(
+        f"프롬프트 파일을 찾을 수 없습니다. 확인 대상: {', '.join(str(p) for p in _prompt_candidates)}"
+    )
 
 with open(_prompt_path, encoding="utf-8") as _f:
     SYSTEM_PROMPT = _f.read().strip()
