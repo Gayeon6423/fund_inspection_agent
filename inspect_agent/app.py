@@ -58,6 +58,24 @@ def safe_name(value: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "_", value).strip()
 
 
+def runtime_prefix() -> str:
+    cloud_markers = (
+        os.getenv("STREAMLIT_SHARING_MODE"),
+        os.getenv("STREAMLIT_CLOUD"),
+        os.getenv("IS_STREAMLIT_CLOUD"),
+    )
+    return "web" if any(cloud_markers) else "local"
+
+
+def normalize_prompt_tag(tag: str) -> str:
+    if tag.startswith("upload_"):
+        return safe_name(tag)
+    parts = Path(tag).stem.split("_")
+    if parts and parts[-1].startswith("v") and parts[-1][1:].isdigit():
+        return f"prompt_{parts[-1]}"
+    return f"prompt_{safe_name(Path(tag).stem)}"
+
+
 def start_inspect_log_run() -> Path:
     APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
     run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -736,6 +754,8 @@ def main():
 
         analysis_results = []
         source_file_name = Path(script_excel.name).stem
+        run_prefix = runtime_prefix()
+        prompt_tag = normalize_prompt_tag(active_prompt_tag)
         convert_status_map = {s: "대기" for s in selected_sheets}
         analyze_status_map = {s: "대기" for s in selected_sheets}
         st.session_state["convert_status"] = convert_status_map
@@ -813,7 +833,11 @@ def main():
                     )
                 match_rate  = calc_match_rate(result_json)
 
-                output_path = OUTPUT_INSPECT_AGENT_DIR / f"web_{ts}_{safe_name(sheet)}_{active_prompt_tag}.json"
+                json_name = (
+                    f"{run_prefix}_{ts}_비교결과_"
+                    f"{safe_name(source_file_name)}_{safe_name(sheet)}_{prompt_tag}.json"
+                )
+                output_path = OUTPUT_INSPECT_AGENT_DIR / json_name
                 output_path.write_text(json.dumps(result_json, ensure_ascii=False, indent=2), encoding="utf-8")
                 append_inspect_log(
                     f"시트 분석 결과 저장 완료 | sheet={sheet} | output={output_path}",
@@ -823,6 +847,9 @@ def main():
                 analysis_results.append({
                     "sheet": sheet,
                     "source_file_name": source_file_name,
+                    "prompt_tag": prompt_tag,
+                    "runtime_prefix": run_prefix,
+                    "run_ts": ts,
                     "script_json": script_json,
                     "match_rate": match_rate,
                     "result_json": result_json,
@@ -901,17 +928,20 @@ def main():
         summary_manual=result_json.get("summary_manual"),
     )
     filter_col, btn_col = st.columns([3, 1])
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     with filter_col:
         verdict_filter = st.radio(" ", options=["전체", "일치", "불일치"], horizontal=True, key="verdict_filter")
     with btn_col:
         if rows:
             st.markdown("<div style='height:22px;'></div>", unsafe_allow_html=True)
-            source_file_name = safe_name(selected.get("source_file_name") or "원본파일")
+            run_ts = selected.get("run_ts") or datetime.now().strftime("%Y%m%d_%H%M%S")
+            run_prefix = selected.get("runtime_prefix") or runtime_prefix()
+            source_file_name = safe_name(selected.get("source_file_name") or "판매대본")
+            sheet_name = safe_name(selected.get("sheet") or "시트")
+            prompt_tag = safe_name(selected.get("prompt_tag") or "prompt")
             st.download_button(
                 label="📥 CSV 다운로드",
                 data=rows_to_csv(rows),
-                file_name=f"비교결과_{ts}_{source_file_name}_{safe_name(selected['sheet'])}.csv",
+                file_name=f"{run_prefix}_{run_ts}_비교결과_{source_file_name}_{sheet_name}_{prompt_tag}.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
