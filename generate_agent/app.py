@@ -22,6 +22,35 @@ APP_LOG_DIR = PROJECT_ROOT / "data" / "log"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "output_generate_agent"
 
 
+def start_generate_log_run() -> Path:
+    APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = APP_LOG_DIR / f"generate_{run_ts}.log"
+    st.session_state["generate_log_path"] = str(log_path)
+    return log_path
+
+
+def append_generate_log(message: str, log_path: Path | None = None):
+    APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    target = log_path
+    if target is None:
+        saved = st.session_state.get("generate_log_path")
+        target = Path(saved) if saved else None
+    if target is None:
+        run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        target = APP_LOG_DIR / f"generate_{run_ts}.log"
+        st.session_state["generate_log_path"] = str(target)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"{timestamp} | INFO | {message}\n"
+    try:
+        with target.open("a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        # 로그 기록 실패가 본 생성 플로우를 깨지 않도록 보호
+        pass
+
+
 def get_setting(name: str, default: str | None = None):
     try:
         if name in st.secrets:
@@ -74,12 +103,16 @@ def render_generate_page():
         )
 
     if st.button("판매대본 생성", type="primary", disabled=uploaded_pdf is None, key="generate_run"):
+        log_path = start_generate_log_run()
+        append_generate_log("판매대본 생성 실행 시작", log_path=log_path)
         if uploaded_pdf is None:
+            append_generate_log("판매대본 생성 중단 | 사유=PDF 미업로드", log_path=log_path)
             st.error("PDF 파일을 먼저 업로드해주세요.")
             return
 
         pdf_bytes = uploaded_pdf.getvalue()
         if not pdf_bytes.startswith(b"%PDF-"):
+            append_generate_log("판매대본 생성 중단 | 사유=PDF 형식 아님", log_path=log_path)
             st.error("PDF 파일이 아닙니다. PDF를 업로드해주세요.")
             return
 
@@ -89,11 +122,14 @@ def render_generate_page():
 
         def _worker():
             try:
+                append_generate_log(f"LLM 생성 요청 시작 | file={uploaded_pdf.name}", log_path=log_path)
                 result_holder["answer_text"] = api._call_llm_generate(
                     manual_pdf_bytes=pdf_bytes,
                     manual_file_name=uploaded_pdf.name,
                 )
+                append_generate_log(f"LLM 생성 요청 완료 | file={uploaded_pdf.name}", log_path=log_path)
             except Exception as e:
+                append_generate_log(f"LLM 생성 요청 오류 | file={uploaded_pdf.name} | error={e}", log_path=log_path)
                 result_holder["error"] = e
 
         thread = threading.Thread(target=_worker, daemon=True)
@@ -108,38 +144,39 @@ def render_generate_page():
             err = result_holder["error"]
             detail = getattr(err, "detail", str(err))
             status_box.info("❌ 판매대본 생성 실패")
+            append_generate_log(f"판매대본 생성 실패 | file={uploaded_pdf.name} | error={detail}", log_path=log_path)
             st.error(f"생성 중 오류가 발생했습니다: {detail}")
             return
 
         answer_text = result_holder["answer_text"]
         try:
             generated = api._parse_json_from_text(answer_text)
+            append_generate_log(f"응답 JSON 파싱 완료 | file={uploaded_pdf.name}", log_path=log_path)
         except Exception:
             generated = {
                 "raw_text": answer_text,
                 "warning": "LLM 응답을 JSON으로 파싱하지 못해 원문을 저장했습니다.",
             }
+            append_generate_log(f"응답 JSON 파싱 실패, 원문 저장 | file={uploaded_pdf.name}", log_path=log_path)
 
         total_elapsed = int(time.time() - started_at)
         status_box.info(f"✅ 판매대본 분석 완료! (총 {total_elapsed}초 소요)")
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_name_raw = uploaded_pdf.name.rsplit(".", 1)[0]
-        base_name = api._safe_tag(base_name_raw)
-        prompt_version = api._safe_tag(api.SYSTEM_PROMPT_VERSION)
-
-        json_name = f"생성결과_{ts}_{base_name}.json"
-        csv_name = f"생성결과_{ts}_{base_name}.csv"
+        json_name = f"generate_{ts}.json"
+        csv_name = f"generate_{ts}.csv"
 
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         json_path = OUTPUT_DIR / json_name
         json_path.write_text(json.dumps(generated, ensure_ascii=False, indent=2), encoding="utf-8")
+        append_generate_log(f"생성 결과 저장 완료 | output={json_path}", log_path=log_path)
 
         json_bytes = json.dumps(generated, ensure_ascii=False, indent=2).encode("utf-8")
         csv_bytes = to_csv_bytes(generated)
         rows = to_table_rows(generated)
 
         st.info("판매대본 파일 생성 및 저장이 완료되었습니다.")
+        append_generate_log(f"판매대본 생성 실행 종료 | file={uploaded_pdf.name} | elapsed={total_elapsed}s", log_path=log_path)
 
         st.markdown("#### 생성 결과 테이블")
         st.dataframe(rows, use_container_width=True, hide_index=True)

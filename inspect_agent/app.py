@@ -58,22 +58,33 @@ def safe_name(value: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "_", value).strip()
 
 
-def append_inspect_log(message: str):
+def start_inspect_log_run() -> Path:
     APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    day = datetime.now().strftime("%Y-%m-%d")
+    run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = APP_LOG_DIR / f"inspect_{run_ts}.log"
+    st.session_state["inspect_log_path"] = str(log_path)
+    return log_path
+
+
+def append_inspect_log(message: str, log_path: Path | None = None):
+    APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    target = log_path
+    if target is None:
+        saved = st.session_state.get("inspect_log_path")
+        target = Path(saved) if saved else None
+    if target is None:
+        run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        target = APP_LOG_DIR / f"inspect_{run_ts}.log"
+        st.session_state["inspect_log_path"] = str(target)
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"{timestamp} | INFO | {message}\n"
-    targets = [
-        APP_LOG_DIR / f"inspect_{day}.log",
-        APP_LOG_DIR / f"{day}.log",  # 기존 날짜 로그 파일도 함께 유지 (호환용)
-    ]
-    for log_path in targets:
-        try:
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(line)
-        except Exception:
-            # 로그 기록 실패가 본 분석 플로우를 깨지 않도록 보호
-            pass
+    try:
+        with target.open("a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        # 로그 기록 실패가 본 분석 플로우를 깨지 않도록 보호
+        pass
 
 
 def parse_sheet_names_from_xlsx_bytes(raw: bytes):
@@ -689,18 +700,19 @@ def main():
 
     run = st.sidebar.button("일치도 분석 실행", type="primary", use_container_width=True)
     if run:
-        append_inspect_log("일치도 분석 실행 시작")
+        log_path = start_inspect_log_run()
+        append_inspect_log("일치도 분석 실행 시작", log_path=log_path)
         if not api_key:
             st.error("API_KEY가 설정되지 않았습니다.")
-            append_inspect_log("일치도 분석 중단 | 사유=API_KEY 미설정")
+            append_inspect_log("일치도 분석 중단 | 사유=API_KEY 미설정", log_path=log_path)
             st.stop()
         if script_excel is None or manual_pdf is None:
             st.error("판매대본 파일과 설명서 파일을 모두 업로드해주세요.")
-            append_inspect_log("일치도 분석 중단 | 사유=입력 파일 누락")
+            append_inspect_log("일치도 분석 중단 | 사유=입력 파일 누락", log_path=log_path)
             st.stop()
         if not selected_sheets:
             st.error("분석할 시트를 1개 이상 선택해주세요.")
-            append_inspect_log("일치도 분석 중단 | 사유=시트 미선택")
+            append_inspect_log("일치도 분석 중단 | 사유=시트 미선택", log_path=log_path)
             st.stop()
 
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -725,7 +737,7 @@ def main():
         render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
 
         for sheet in selected_sheets:
-            append_inspect_log(f"시트 분석 시작 | sheet={sheet}")
+            append_inspect_log(f"시트 분석 시작 | sheet={sheet}", log_path=log_path)
             sheet_start  = time.time()
             timer_ph     = st.empty()
             current_step = ["변환 중"]
@@ -797,7 +809,10 @@ def main():
 
                 output_path = OUTPUT_INSPECT_AGENT_DIR / f"web_{ts}_{safe_name(sheet)}_{active_prompt_tag}.json"
                 output_path.write_text(json.dumps(result_json, ensure_ascii=False, indent=2), encoding="utf-8")
-                append_inspect_log(f"시트 분석 결과 저장 완료 | sheet={sheet} | output={output_path}")
+                append_inspect_log(
+                    f"시트 분석 결과 저장 완료 | sheet={sheet} | output={output_path}",
+                    log_path=log_path,
+                )
 
                 analysis_results.append({
                     "sheet": sheet,
@@ -812,7 +827,7 @@ def main():
                 elapsed_total = int(time.time() - sheet_start)
                 analyze_status_map[sheet] = f"분석 완료 ({elapsed_total}초)"
                 timer_ph.success(f"✅ [{sheet}] 완료! (총 {elapsed_total}초 소요)")
-                append_inspect_log(f"시트 분석 완료 | sheet={sheet} | elapsed={elapsed_total}s")
+                append_inspect_log(f"시트 분석 완료 | sheet={sheet} | elapsed={elapsed_total}s", log_path=log_path)
 
             except Exception as e:
                 done_event.set()
@@ -820,7 +835,7 @@ def main():
                 elapsed = int(time.time() - sheet_start)
                 st.error(f"[{sheet}] 처리 중 오류: {e}")
                 timer_ph.error(f"❌ [{sheet}] 오류 ({elapsed}초 후)")
-                append_inspect_log(f"시트 분석 오류 | sheet={sheet} | elapsed={elapsed}s | error={e}")
+                append_inspect_log(f"시트 분석 오류 | sheet={sheet} | elapsed={elapsed}s | error={e}", log_path=log_path)
                 if convert_status_map.get(sheet) == "변환 중":
                     convert_status_map[sheet] = "변환 오류"
                 else:
@@ -831,7 +846,7 @@ def main():
                 render_status_panel(status_placeholder, selected_sheets, convert_status_map, analyze_status_map)
 
         st.session_state["analysis_results"] = analysis_results
-        append_inspect_log(f"일치도 분석 실행 종료 | 성공 시트 수={len(analysis_results)}")
+        append_inspect_log(f"일치도 분석 실행 종료 | 성공 시트 수={len(analysis_results)}", log_path=log_path)
         if analysis_results:
             st.session_state["selected_sheet"] = analysis_results[0]["sheet"]
 
