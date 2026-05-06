@@ -272,6 +272,7 @@ def main():
     api.API_KEY = get_setting("API_KEY")
     api.MODEL = get_setting("LLM_MODEL", api.MODEL)
     api.SYSTEM_PROMPT_VERSION = get_setting("GENERATE_SYSTEM_PROMPT_VERSION", api.SYSTEM_PROMPT_VERSION)
+    st.caption(f"실행 설정 · model: `{api.MODEL}` · prompt: `{api.SYSTEM_PROMPT_VERSION}`")
 
     st.markdown(
     """
