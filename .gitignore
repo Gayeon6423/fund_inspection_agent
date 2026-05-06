@@ -29,9 +29,9 @@ secrets.toml
 legacy/
 
 # Generated outputs
-# data/output_agent/
-# data/output_excel_json/
-# data/uploads_local/
+data/output_agent/
+data/output_excel_json/
+data/uploads_local/
 
 data/uploads_external/
 data/log/*.log
