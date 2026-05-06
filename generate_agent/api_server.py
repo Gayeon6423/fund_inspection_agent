@@ -28,7 +28,7 @@ load_dotenv(find_dotenv(), override=True)
 
 API_KEY = os.getenv("API_KEY")
 MODEL = os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001")
-SYSTEM_PROMPT_VERSION = os.getenv("GENERATE_SYSTEM_PROMPT_VERSION", "generate_system_prompt_v2")
+SYSTEM_PROMPT_VERSION = os.getenv("GENERATE_SYSTEM_PROMPT_VERSION", "generate_system_prompt_v3")
 
 
 class DailyFileHandler(logging.Handler):
@@ -97,8 +97,6 @@ def _resolve_prompt_path() -> Path:
     candidates = [
         PROMPT_DIR / f"{SYSTEM_PROMPT_VERSION}.md",
         PROMPT_DIR / f"{SYSTEM_PROMPT_VERSION}.txt",
-        PROMPT_DIR / "generate_system_prompt_v1.md",
-        PROMPT_DIR / "generate_system_prompt_v1.txt",
     ]
     for path in candidates:
         if path.exists():

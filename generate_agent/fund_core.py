@@ -15,8 +15,6 @@ _prompt_dir = Path(__file__).resolve().parent / "prompt"
 _prompt_candidates = [
     _prompt_dir / f"{SYSTEM_PROMPT_VERSION}.md",
     _prompt_dir / f"{SYSTEM_PROMPT_VERSION}.txt",
-    _prompt_dir / "generate_system_prompt_v1.md",
-    _prompt_dir / "generate_system_prompt_v1.txt",
 ]
 for _candidate in _prompt_candidates:
     if _candidate.exists():

@@ -33,7 +33,7 @@ print("서버 실행:", " ".join(cmd))
 
 child_env = os.environ.copy()
 if APP_MODULE.startswith("generate_agent.") and not child_env.get("GENERATE_SYSTEM_PROMPT_VERSION"):
-    child_env["GENERATE_SYSTEM_PROMPT_VERSION"] = "generate_system_prompt_v2"
+    child_env["GENERATE_SYSTEM_PROMPT_VERSION"] = "generate_system_prompt_v3"
 
 proc = subprocess.Popen(
     cmd,
