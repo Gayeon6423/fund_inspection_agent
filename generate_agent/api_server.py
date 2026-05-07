@@ -188,30 +188,7 @@ def _parse_json_from_text(answer_text: str) -> dict:
     """
     위 함수로 추출한 JSON 블록을 실제 JSON 객체인 파이썬 딕셔너리로 파싱합니다.
     """
-    json_text = _extract_json_block(answer_text)
-    try:
-        return json.loads(json_text)
-    except json.JSONDecodeError as first_error:
-        # 모델이 스마트 따옴표/후행 쉼표를 섞어 내보내는 경우를 보정해 한 번 더 파싱 시도합니다.
-        repaired = (
-            json_text.replace("“", '"')
-            .replace("”", '"')
-            .replace("’", "'")
-            .replace("‘", "'")
-        )
-        repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
-        if repaired != json_text:
-            try:
-                return json.loads(repaired)
-            except json.JSONDecodeError:
-                pass
-
-        lines = json_text.splitlines()
-        bad_line = lines[first_error.lineno - 1] if 1 <= first_error.lineno <= len(lines) else ""
-        raise ValueError(
-            f"LLM JSON 파싱 실패: {first_error.msg} (line {first_error.lineno}, column {first_error.colno}). "
-            f"문제 줄: {bad_line[:200]}"
-        ) from first_error
+    return json.loads(_extract_json_block(answer_text))
 
 
 def _call_llm_generate(manual_pdf_bytes: bytes, manual_file_name: Optional[str]) -> str:
