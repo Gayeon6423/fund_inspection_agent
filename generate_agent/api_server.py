@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from dotenv import find_dotenv, load_dotenv
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -24,7 +24,7 @@ PROMPT_DIR = MODULE_DIR / "prompt"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "output_generate_agent"
 LOG_DIR = PROJECT_ROOT / "data" / "log"
 
-load_dotenv(find_dotenv(), override=True)
+load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 API_KEY = os.getenv("API_KEY")
 MODEL = os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001")

@@ -1,23 +1,29 @@
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 import requests
-from dotenv import find_dotenv, load_dotenv
-
-load_dotenv(find_dotenv(), override=True)
+from dotenv import load_dotenv
 
 MODULE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = MODULE_DIR.parent
+load_dotenv(PROJECT_ROOT / ".env", override=True)
 HOST = "127.0.0.1"
 PORT = int("8012")
 BASE_URL = f"http://{HOST}:{PORT}"
 APP_MODULE = "generate_agent.api_server:app"
 ENDPOINT = "/v1/agent/fund/generate-script"
+
+
+def _is_port_open(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.5)
+        return sock.connect_ex((host, port)) == 0
 
 
 manual_file = os.getenv("GENERATE_MANUAL_FILE") 
@@ -31,9 +37,18 @@ payload = {"manual_file_path": manual_file_path,
 cmd = [sys.executable,"-m","uvicorn",APP_MODULE,"--host",HOST,"--port",str(PORT),"--log-level","warning"]
 print("서버 실행:", " ".join(cmd))
 
+if _is_port_open(HOST, PORT):
+    raise SystemExit(
+        f"{HOST}:{PORT} 포트를 이미 다른 프로세스가 사용 중입니다. "
+        "기존 서버를 종료한 뒤 다시 실행해주세요. "
+        "(예: lsof -nP -iTCP:8012 -sTCP:LISTEN)"
+    )
+
 child_env = os.environ.copy()
 if APP_MODULE.startswith("generate_agent.") and not child_env.get("GENERATE_SYSTEM_PROMPT_VERSION"):
     child_env["GENERATE_SYSTEM_PROMPT_VERSION"] = "generate_system_prompt_v3"
+print("테스트 프로세스 LLM_MODEL:", os.getenv("LLM_MODEL"))
+print("서버 실행 환경 LLM_MODEL:", child_env.get("LLM_MODEL"))
 
 proc = subprocess.Popen(
     cmd,
@@ -77,4 +92,3 @@ try:
 except ValueError:
     print("응답 원문:")
     print(resp.text)
-
