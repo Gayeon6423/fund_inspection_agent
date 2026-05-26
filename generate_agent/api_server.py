@@ -219,7 +219,7 @@ def _call_llm_generate(manual_pdf_bytes: bytes, manual_file_name: Optional[str])
 
     payload = {
         "model": MODEL,
-        "max_tokens": 8000,
+        "max_tokens": 16000,
         "system": _load_system_prompt(),
         "messages": [{"role": "user", "content": user_content}],
     }
